@@ -3130,6 +3130,7 @@ class Resource(Element, _IDProperty, _NameProperty, _UtypeProperty,
         self._tables = HomogeneousList(Table)
         self._resources = HomogeneousList(Resource)
 
+        self._mapping_block = ""
         warn_unknown_attrs('RESOURCE', kwargs.keys(), config, pos)
 
     def __repr__(self):
@@ -3233,6 +3234,14 @@ class Resource(Element, _IDProperty, _NameProperty, _UtypeProperty,
         """
         return self._resources
 
+    @property
+    def mapping_block(self,):
+        """
+        The XML mapping block serialized as string.
+        Must be empty if type != meta
+        """
+        return self._mapping_block
+    
     def _add_table(self, iterator, tag, data, config, pos):
         table = Table(self._votable, config=config, pos=pos, **data)
         self.tables.append(table)
@@ -3272,7 +3281,22 @@ class Resource(Element, _IDProperty, _NameProperty, _UtypeProperty,
         link = Link(config=config, pos=pos, **data)
         self.links.append(link)
         link.parse(iterator, config)
+        
+    def _add_mapping_statement(self, start, tag, data, config, pos):
+        if start:
+            element = "<" + tag 
+            for k,v in data.items():
+                element += f" {k}='{v}'"
+            element += ">\n"
+        else:
+            element = f"</{tag}>\n"
+        self._mapping_block += element
+        
+    def _unknown_mapping_tag(self, start, tag, data, config, pos):
+        self._mapping_block = f'<VODML><REPORT status="KO">Unknown mapping statement: {tag}</REPORT></VODML>'
+        warn_or_raise(W10, W10, tag, config, pos)
 
+    
     def parse(self, votable, iterator, config):
         self._votable = votable
 
@@ -3287,8 +3311,34 @@ class Resource(Element, _IDProperty, _NameProperty, _UtypeProperty,
             'LINK': self._add_link,
             'DESCRIPTION': self._ignore_add
             }
-
+        model_mapping_mapping = {
+            'VODML': self._add_mapping_statement,
+            'GLOBALS': self._add_mapping_statement,
+            'REPORT': self._add_mapping_statement,
+            'MODEL': self._add_mapping_statement,
+            'TEMPLATES': self._add_mapping_statement,
+            'COLLECTION': self._add_mapping_statement,
+            'INSTANCE': self._add_mapping_statement,
+            'ATTRIBUTE': self._add_mapping_statement,
+            'REFERENCE': self._add_mapping_statement,
+            'JOIN': self._add_mapping_statement,
+            'WHERE': self._add_mapping_statement,
+            'PRIMARY_KEY': self._add_mapping_statement,
+            'FOREIGN_KEY': self._add_mapping_statement,
+            
+            }
+        reading_mapping = False
         for start, tag, data, pos in iterator:
+            if self.type == "meta":
+                if start and tag == "VODML":
+                    reading_mapping = True
+                if reading_mapping is True:
+                    model_mapping_mapping.get(tag, self._unknown_mapping_tag)(
+                        start, tag, data, config, pos)
+                if not start and tag == "VODML":
+                    reading_mapping = False
+
+                
             if start:
                 tag_mapping.get(tag, self._add_unknown_tag)(
                     iterator, tag, data, config, pos)
