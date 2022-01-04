@@ -28,7 +28,7 @@ from .exceptions import (warn_or_raise, vo_warn, vo_raise, vo_reraise,
                          W29, W32, W33, W35, W36, W37, W38, W40, W41, W42, W43,
                          W44, W45, W50, W52, W53, W54, E06, E08, E09, E10, E11,
                          E12, E13, E15, E16, E17, E18, E19, E20, E21, E22, E23,
-                         E25)
+                         E25, E26)
 from . import ucd as ucd_mod
 from . import util
 from . import xmlutil
@@ -3097,6 +3097,119 @@ class Table(Element, _IDProperty, _NameProperty, _UcdProperty,
             yield info
 
 
+class ModelMapping(Element):
+    """
+    Model mapping holder
+    Processing VO model views on data is out of the scope of Astropy.
+    This is why the only VOmodel-related feature implemented here the 
+    extraction or the writing of a mapping block from/to a VOtable
+    There is no syntax validation apart of the allowed tag names.
+    The mapping block is handled as a correctly indented XML string
+    which is meant to be parsed by the calling API (e.g. PyVO)
+    """
+    def __init__(self, mapping_block=None):
+        if mapping_block is not None:
+            self._mapping_block = mapping_block
+        else:
+            self._mapping_block = ''
+        self._indent_level = 0
+        self._on_error = False
+
+    def __str__(self):
+        return self._mapping_block
+    
+    def _add_statement(self, start, tag, data, config, pos):
+        """
+        Convert the tag as a string and append it to the mapping 
+        block string with the correct indentation level.
+        """
+        if self._on_error is True:
+            return
+        
+        # The first mapping tag (<VODML>) is consumed by the host RESOURCE
+        # To check that the content is a mapping block. This cannot be done here 
+        # because that RESOURCE might have another content
+        if self._mapping_block == '':
+            self._mapping_block = '<VODML>\n'
+            self._indent_level += 1
+            
+        if start:
+            element = "<" + tag 
+            for k,v in data.items():
+                element += f" {k}='{v}'"
+            element += ">\n"
+        else:
+            element = f"</{tag}>\n"
+            
+        if start is False:
+            self._indent_level -= 1
+        indent = "".join(" " for _ in range(2*self._indent_level))
+        self._mapping_block += indent + element
+        if start is True:
+            self._indent_level += 1
+
+    def _unknown_mapping_tag(self, start, tag, data, config, pos):
+        """
+        In case of unexpected tag, the parsing stops and the mapping block 
+        is set with a REPORT tag telling what went wrong
+        """
+        self._mapping_block = f'<VODML>\n  <REPORT status="KO">Unknown model mapping statement: {tag}</REPORT>\n</VODML>'
+        self._on_error = True
+        warn_or_raise(W10, W10, tag, config={'verify': 'warn'}, pos=pos)
+
+
+    
+    @property
+    def mapping_block(self,):
+        """
+        The XML mapping block serialized as string.
+        Must be empty if type != meta
+        """
+        if self._mapping_block == '':
+            self._mapping_block = '<VODML>\n  <REPORT status="KO">No Mapping block</REPORT>\n</VODML>\n'
+        return self._mapping_block
+    
+    
+    
+    def parse(self, votable, iterator, config):
+        """
+        Regular parser similar to others VOTable components
+        """
+        self._votable = votable
+
+        model_mapping_mapping = {
+            'VODML': self._add_statement,
+            'GLOBALS': self._add_statement,
+            'REPORT': self._add_statement,
+            'MODEL': self._add_statement,
+            'TEMPLATES': self._add_statement,
+            'COLLECTION': self._add_statement,
+            'INSTANCE': self._add_statement,
+            'ATTRIBUTE': self._add_statement,
+            'REFERENCE': self._add_statement,
+            'JOIN': self._add_statement,
+            'WHERE': self._add_statement,
+            'PRIMARY_KEY': self._add_statement,
+            'FOREIGN_KEY': self._add_statement,
+            
+            }
+
+        for start, tag, data, pos in iterator:
+            model_mapping_mapping.get(tag, self._unknown_mapping_tag)(
+                    start, tag, data, config, pos)
+            if start == False and tag == 'VODML':
+                break
+
+        del self._votable
+
+        return self
+    
+    def to_xml(self, w):
+        """
+        Tell the writer to insert the mapping block in its output stream
+        """
+        w.string_element(self._mapping_block)
+    
 class Resource(Element, _IDProperty, _NameProperty, _UtypeProperty,
                _DescriptionProperty):
     """
@@ -3130,7 +3243,7 @@ class Resource(Element, _IDProperty, _NameProperty, _UtypeProperty,
         self._tables = HomogeneousList(Table)
         self._resources = HomogeneousList(Resource)
 
-        self._mapping_block = ""
+        self._model_mapping = ModelMapping()
         warn_unknown_attrs('RESOURCE', kwargs.keys(), config, pos)
 
     def __repr__(self):
@@ -3159,6 +3272,23 @@ class Resource(Element, _IDProperty, _NameProperty, _UtypeProperty,
         if type not in ('results', 'meta'):
             vo_raise(E18, type, self._config, self._pos)
         self._type = type
+        
+    @property
+    def model_mapping(self):
+        """
+        The XML mapping block serialized as string.
+        Must be empty if type != meta
+        """
+        if self.type == 'meta':
+            return self._model_mapping
+        else:
+            return None
+
+    @model_mapping.setter
+    def model_mapping(self, model_mapping):
+        if self.type != 'meta':
+            vo_raise(E26)
+        self._model_mapping = model_mapping
 
     @property
     def extra_attributes(self):
@@ -3233,14 +3363,6 @@ class Resource(Element, _IDProperty, _NameProperty, _UtypeProperty,
         only `Resource` objects.
         """
         return self._resources
-
-    @property
-    def mapping_block(self,):
-        """
-        The XML mapping block serialized as string.
-        Must be empty if type != meta
-        """
-        return self._mapping_block
     
     def _add_table(self, iterator, tag, data, config, pos):
         table = Table(self._votable, config=config, pos=pos, **data)
@@ -3281,22 +3403,7 @@ class Resource(Element, _IDProperty, _NameProperty, _UtypeProperty,
         link = Link(config=config, pos=pos, **data)
         self.links.append(link)
         link.parse(iterator, config)
-        
-    def _add_mapping_statement(self, start, tag, data, config, pos):
-        if start:
-            element = "<" + tag 
-            for k,v in data.items():
-                element += f" {k}='{v}'"
-            element += ">\n"
-        else:
-            element = f"</{tag}>\n"
-        self._mapping_block += element
-        
-    def _unknown_mapping_tag(self, start, tag, data, config, pos):
-        self._mapping_block = f'<VODML><REPORT status="KO">Unknown mapping statement: {tag}</REPORT></VODML>'
-        warn_or_raise(W10, W10, tag, config, pos)
-
-    
+            
     def parse(self, votable, iterator, config):
         self._votable = votable
 
@@ -3311,34 +3418,15 @@ class Resource(Element, _IDProperty, _NameProperty, _UtypeProperty,
             'LINK': self._add_link,
             'DESCRIPTION': self._ignore_add
             }
-        model_mapping_mapping = {
-            'VODML': self._add_mapping_statement,
-            'GLOBALS': self._add_mapping_statement,
-            'REPORT': self._add_mapping_statement,
-            'MODEL': self._add_mapping_statement,
-            'TEMPLATES': self._add_mapping_statement,
-            'COLLECTION': self._add_mapping_statement,
-            'INSTANCE': self._add_mapping_statement,
-            'ATTRIBUTE': self._add_mapping_statement,
-            'REFERENCE': self._add_mapping_statement,
-            'JOIN': self._add_mapping_statement,
-            'WHERE': self._add_mapping_statement,
-            'PRIMARY_KEY': self._add_mapping_statement,
-            'FOREIGN_KEY': self._add_mapping_statement,
-            
-            }
-        reading_mapping = False
-        for start, tag, data, pos in iterator:
-            if self.type == "meta":
-                if start and tag == "VODML":
-                    reading_mapping = True
-                if reading_mapping is True:
-                    model_mapping_mapping.get(tag, self._unknown_mapping_tag)(
-                        start, tag, data, config, pos)
-                if not start and tag == "VODML":
-                    reading_mapping = False
 
-                
+
+        for start, tag, data, pos in iterator:
+            # The only content supported for meta RESOURCEs is a model mapping block
+            # If there is no such block, the parsing does continue
+            if self.type == "meta" and tag == "VODML":
+                self._model_mapping.parse(votable, iterator, config)
+                break
+
             if start:
                 tag_mapping.get(tag, self._add_unknown_tag)(
                     iterator, tag, data, config, pos)
@@ -3348,7 +3436,7 @@ class Resource(Element, _IDProperty, _NameProperty, _UtypeProperty,
                 self.description = data or None
             elif tag == 'RESOURCE':
                 break
-
+    
         del self._votable
 
         return self
@@ -3359,6 +3447,8 @@ class Resource(Element, _IDProperty, _NameProperty, _UtypeProperty,
         with w.tag('RESOURCE', attrib=attrs):
             if self.description is not None:
                 w.element("DESCRIPTION", self.description, wrap=True)
+            if self.model_mapping is not None:
+                self.model_mapping.to_xml(w)
             for element_set in (self.coordinate_systems, self.time_systems,
                                 self.params, self.infos, self.links,
                                 self.tables, self.resources):
