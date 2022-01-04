@@ -238,6 +238,11 @@ class VOTableSpecWarning(VOWarning, SyntaxWarning):
     """
     The input XML file violates the spec, but there is an obvious workaround.
     """
+    
+class ModelMappingSpecWarning(VOWarning, SyntaxWarning):
+    """
+    The input model mapping XML mapping block violates the spec.
+    """
 
 
 class UnimplementedWarning(VOWarning, SyntaxWarning):
@@ -1490,6 +1495,13 @@ class E25(VOTableSpecWarning):
     """
 
     message_template = "No FIELDs are defined; DATA section will be ignored."
+
+class E26(VOTableSpecError):
+    """
+    The mapping block can only be set in a type=meta RESOURCE.
+    """
+
+    message_template = "Mapping block can only be set in a RESOURCE with type=meta "
 
 
 def _get_warning_and_exception_classes(prefix):
