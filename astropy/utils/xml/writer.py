@@ -299,6 +299,12 @@ class XMLWriter:
         if text:
             self.data(text)
         self.end(indent=False, wrap=wrap)
+        
+    def string_element(self, xml_string):
+        self._flush()
+        indent = self.get_indentation_spaces()
+        str_to_write = indent +  xml_string.replace("\n", f"\n{indent}").strip() + "\n"
+        self.write(str_to_write)
 
     def flush(self):
         pass  # replaced by the constructor
