@@ -3435,7 +3435,7 @@ class Resource(Element, _IDProperty, _NameProperty, _UtypeProperty,
                     warn_or_raise(W17, W17, 'RESOURCE', config, pos)
                 self.description = data or None
             elif tag == 'RESOURCE':
-                break
+                pass
     
         del self._votable
 
