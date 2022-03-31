@@ -6,7 +6,7 @@ import pytest
 from astropy.io.votable.exceptions import W07, W08, W21, W41
 from astropy.io.votable import tree
 from astropy.io.votable.table import parse
-from astropy.io.votable.tree import VOTableFile, Resource
+from astropy.io.votable.tree import VOTableFile, Resource, ModelMapping
 from astropy.utils.data import get_pkg_data_filename
 from astropy.utils.exceptions import AstropyDeprecationWarning
 
@@ -138,7 +138,6 @@ def votable_xml_string(version):
     s = bstring.decode("utf-8")
     return s
 
-
 def test_votable_tag():
     xml = votable_xml_string('1.1')
     assert 'xmlns="http://www.ivoa.net/xml/VOTable/v1.1"' in xml
@@ -157,3 +156,10 @@ def test_votable_tag():
     assert 'xmlns="http://www.ivoa.net/xml/VOTable/v1.3"' in xml
     assert 'xsi:schemaLocation="http://www.ivoa.net/xml/VOTable/v1.3 '
     assert 'http://www.ivoa.net/xml/VOTable/VOTable-1.4.xsd"' in xml
+
+def test_annotated_votable_tag():
+    votable = parse(get_pkg_data_filename('data/model_mapping.xml'))
+    for resource in votable.resources:
+        assert resource.model_mapping.mapping_block.strip().startswith("<VODML") is True
+        assert resource.model_mapping.mapping_block.strip().endswith("</VODML>") is True
+        break
