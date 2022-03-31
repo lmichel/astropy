@@ -3277,12 +3277,15 @@ class Resource(Element, _IDProperty, _NameProperty, _UtypeProperty,
     def model_mapping(self):
         """
         The XML mapping block serialized as string.
-        Must be empty if type != meta
+        Take the resource mqpping block if type=meta
+        or the mqpping block of the sub-resource (type=meta) if type=results
         """
         if self.type == 'meta':
             return self._model_mapping
-        else:
-            return None
+        elif self.type == 'results':
+            for resource in self.resources:
+                return resource.model_mapping
+        return None
 
     @model_mapping.setter
     def model_mapping(self, model_mapping):
@@ -3447,7 +3450,7 @@ class Resource(Element, _IDProperty, _NameProperty, _UtypeProperty,
         with w.tag('RESOURCE', attrib=attrs):
             if self.description is not None:
                 w.element("DESCRIPTION", self.description, wrap=True)
-            if self.model_mapping is not None:
+            if self.model_mapping is not None and self.type == "meta":
                 self.model_mapping.to_xml(w)
             for element_set in (self.coordinate_systems, self.time_systems,
                                 self.params, self.infos, self.links,
