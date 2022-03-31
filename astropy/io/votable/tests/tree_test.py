@@ -158,6 +158,8 @@ def test_votable_tag():
     assert 'http://www.ivoa.net/xml/VOTable/VOTable-1.4.xsd"' in xml
 
 def test_annotated_votable_tag():
+    # test the mapping block extraction
+    # Mapping block writing not tested yet
     votable = parse(get_pkg_data_filename('data/model_mapping.xml'))
     for resource in votable.resources:
         assert resource.model_mapping.mapping_block.strip().startswith("<VODML") is True
