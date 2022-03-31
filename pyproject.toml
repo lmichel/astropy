@@ -4,6 +4,8 @@ requires = ["setuptools",
             "wheel",
             "cython==0.29.22",
             "jinja2==2.10.3",
+            # Added to avoid cannot import name 'soft_unicode' from 'markupsafe'
+            "markupsafe==2.0.1",
             "oldest-supported-numpy",
             "extension-helpers"]
 build-backend = 'setuptools.build_meta'
