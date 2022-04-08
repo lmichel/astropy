@@ -3124,25 +3124,29 @@ class ModelMapping(Element):
         """
         if self._on_error is True:
             return
-        
         # The first mapping tag (<VODML>) is consumed by the host RESOURCE
         # To check that the content is a mapping block. This cannot be done here 
         # because that RESOURCE might have another content
         if self._mapping_block == '':
             self._mapping_block = '<VODML>\n'
             self._indent_level += 1
-            
+
+        ele_content = ""
         if start:
             element = "<" + tag 
             for k,v in data.items():
                 element += f" {k}='{v}'"
             element += ">\n"
         else:
+            if data:
+                ele_content = f"{data}\n"
             element = f"</{tag}>\n"
             
         if start is False:
             self._indent_level -= 1
         indent = "".join(" " for _ in range(2*self._indent_level))
+        if ele_content:
+            self._mapping_block += indent + "  "  + ele_content
         self._mapping_block += indent + element
         if start is True:
             self._indent_level += 1
@@ -3424,7 +3428,7 @@ class Resource(Element, _IDProperty, _NameProperty, _UtypeProperty,
 
         for start, tag, data, pos in iterator:
             # The only content supported for meta RESOURCEs is a model mapping block
-            # If there is no such block, the parsing does continue
+            # If there is no such block, the RESOURCE parsing can exit
             if self.type == "meta" and tag == "VODML":
                 self._model_mapping.parse(votable, iterator, config)
                 break
@@ -3437,7 +3441,7 @@ class Resource(Element, _IDProperty, _NameProperty, _UtypeProperty,
                     warn_or_raise(W17, W17, 'RESOURCE', config, pos)
                 self.description = data or None
             elif tag == 'RESOURCE':
-                pass
+                break
     
         del self._votable
 
