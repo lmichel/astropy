@@ -15,33 +15,30 @@ parameters in each model making up the set.
 # pylint: disable=invalid-name, protected-access, redefined-outer-name
 import abc
 import copy
+import functools
 import inspect
 import itertools
-import functools
+import numbers
 import operator
 import types
-
 from collections import defaultdict, deque
 from inspect import signature
 from itertools import chain
 
 import numpy as np
 
-from astropy.utils import indent, metadata
+from astropy.nddata.utils import add_array, extract_array
 from astropy.table import Table
 from astropy.units import Quantity, UnitsError, dimensionless_unscaled
 from astropy.units.utils import quantity_asanyarray
-from astropy.utils import (sharedmethod, find_current_module,
-                           check_broadcast, IncompatibleShapeError, isiterable)
+from astropy.utils import (IncompatibleShapeError, check_broadcast, find_current_module, indent,
+                           isiterable, metadata, sharedmethod)
 from astropy.utils.codegen import make_function_with_signature
-from astropy.nddata.utils import add_array, extract_array
-from .utils import (combine_labels, make_binary_operator_eval,
-                    get_inputs_and_params, _combine_equivalency_dict,
-                    _ConstraintsDict, _SpecialOperatorsDict)
-from .bounding_box import ModelBoundingBox, CompoundBoundingBox
-from .parameters import (Parameter, InputParameterError,
-                         param_repr_oneline, _tofloat)
 
+from .bounding_box import CompoundBoundingBox, ModelBoundingBox
+from .parameters import InputParameterError, Parameter, _tofloat, param_repr_oneline
+from .utils import (_combine_equivalency_dict, _ConstraintsDict, _SpecialOperatorsDict,
+                    combine_labels, get_inputs_and_params, make_binary_operator_eval)
 
 __all__ = ['Model', 'FittableModel', 'Fittable1DModel', 'Fittable2DModel',
            'CompoundModel', 'fix_inputs', 'custom_model', 'ModelDefinitionError',
@@ -85,7 +82,7 @@ class _ModelMeta(abc.ABCMeta):
     # Default empty dict for _parameters_, which will be empty on model
     # classes that don't have any Parameters
 
-    def __new__(mcls, name, bases, members):
+    def __new__(mcls, name, bases, members, **kwds):
         # See the docstring for _is_dynamic above
         if '_is_dynamic' not in members:
             members['_is_dynamic'] = mcls._is_dynamic
@@ -105,7 +102,7 @@ class _ModelMeta(abc.ABCMeta):
 
         for opermethod, opercall in opermethods:
             members[opermethod] = opercall
-        cls = super().__new__(mcls, name, bases, members)
+        cls = super().__new__(mcls, name, bases, members, **kwds)
 
         param_names = list(members['_parameters_'])
 
@@ -128,8 +125,8 @@ class _ModelMeta(abc.ABCMeta):
 
         return cls
 
-    def __init__(cls, name, bases, members):
-        super(_ModelMeta, cls).__init__(name, bases, members)
+    def __init__(cls, name, bases, members, **kwds):
+        super(_ModelMeta, cls).__init__(name, bases, members, **kwds)
         cls._create_inverse_property(members)
         cls._create_bounding_box_property(members)
         pdict = {}
@@ -286,7 +283,7 @@ class _ModelMeta(abc.ABCMeta):
             # See if it's a hard-coded bounding_box (as a sequence) and
             # normalize it
             try:
-                bounding_box = ModelBoundingBox.validate(cls, bounding_box)
+                bounding_box = ModelBoundingBox.validate(cls, bounding_box, _preserve_ignore=True)
             except ValueError as exc:
                 raise ModelDefinitionError(exc.args[0])
         else:
@@ -695,6 +692,9 @@ class Model(metaclass=_ModelMeta):
     _cov_matrix = None
     _stds = None
 
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__()
+
     def __init__(self, *args, meta=None, name=None, **kwargs):
         super().__init__()
         self._default_inputs_outputs()
@@ -801,6 +801,15 @@ class Model(metaclass=_ModelMeta):
                     return 0
 
         return self.__class__.n_outputs
+
+    def _calculate_separability_matrix(self):
+        """
+        This is a hook which customises the behavior of modeling.separable.
+
+        This allows complex subclasses to customise the separability matrix.
+        If it returns `NotImplemented` the default behavior is used.
+        """
+        return NotImplemented
 
     def _initialize_unit_support(self):
         """
@@ -1450,7 +1459,7 @@ class Model(metaclass=_ModelMeta):
 
         if cls is not None:
             try:
-                bounding_box = cls.validate(self, bounding_box)
+                bounding_box = cls.validate(self, bounding_box, _preserve_ignore=True)
             except ValueError as exc:
                 raise ValueError(exc.args[0])
 
@@ -3336,9 +3345,9 @@ class CompoundModel(Model):
                     if leftind == start and rightind == stop:
                         return node
                 raise IndexError("No appropriate subtree matches slice")
-        if isinstance(index, type(0)):
+        if np.issubdtype(type(index), np.integer):
             return leaflist[index]
-        elif isinstance(index, type('')):
+        elif isinstance(index, str):
             return leaflist[self._str_index_to_int(index)]
         else:
             raise TypeError('index must be integer, slice, or model name string')
@@ -4087,11 +4096,14 @@ def fix_inputs(modelinstance, values, bounding_boxes=None, selector_args=None):
         bbox = CompoundBoundingBox.validate(modelinstance, bounding_boxes, selector_args)
         _selector = bbox.selector_args.get_fixed_values(modelinstance, values)
 
-        model.bounding_box = bbox[_selector]
+        new_bbox = bbox[_selector]
+        new_bbox = new_bbox.__class__.validate(model, new_bbox)
+
+        model.bounding_box = new_bbox
     return model
 
 
-def bind_bounding_box(modelinstance, bounding_box, order='C'):
+def bind_bounding_box(modelinstance, bounding_box, ignored=None, order='C'):
     """
     Set a validated bounding box to a model instance.
 
@@ -4101,17 +4113,20 @@ def bind_bounding_box(modelinstance, bounding_box, order='C'):
         This is the model that the validated bounding box will be set on.
     bounding_box : tuple
         A bounding box tuple, see :ref:`astropy:bounding-boxes` for details
+    ignored : list
+        List of the inputs to be ignored by the bounding box.
     order : str, optional
         The ordering of the bounding box tuple, can be either ``'C'`` or
         ``'F'``.
     """
     modelinstance.bounding_box = ModelBoundingBox.validate(modelinstance,
                                                            bounding_box,
+                                                           ignored=ignored,
                                                            order=order)
 
 
 def bind_compound_bounding_box(modelinstance, bounding_boxes, selector_args,
-                               create_selector=None, order='C'):
+                               create_selector=None, ignored=None, order='C'):
     """
     Add a validated compound bounding box to a model instance.
 
@@ -4131,14 +4146,16 @@ def bind_compound_bounding_box(modelinstance, bounding_boxes, selector_args,
         there is no bounding box in the compound bounding box listed under
         that selector value. Default is ``None``, meaning new bounding
         box entries will not be automatically generated.
+    ignored : list
+        List of the inputs to be ignored by the bounding box.
     order : str, optional
         The ordering of the bounding box tuple, can be either ``'C'`` or
         ``'F'``.
     """
     modelinstance.bounding_box = CompoundBoundingBox.validate(modelinstance,
-                                                              bounding_boxes,
-                                                              selector_args,
-                                                              create_selector,
+                                                              bounding_boxes, selector_args,
+                                                              create_selector=create_selector,
+                                                              ignored=ignored,
                                                               order=order)
 
 

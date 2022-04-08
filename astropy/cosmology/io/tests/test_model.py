@@ -5,33 +5,24 @@ import inspect
 import random
 
 # THIRD PARTY
+import numpy as np
 import pytest
 
-import numpy as np
-
 # LOCAL
-import astropy.units as u
-from astropy import cosmology
-from astropy.cosmology import Cosmology, Planck18, realizations
-from astropy.cosmology.core import _COSMOLOGY_CLASSES, Parameter
+from astropy.cosmology.core import Cosmology
 from astropy.cosmology.io.model import _CosmologyModel, from_model, to_model
-from astropy.cosmology.parameters import available
-from astropy.modeling import FittableModel
+from astropy.cosmology.tests.helper import get_redshift_methods
 from astropy.modeling.models import Gaussian1D
 from astropy.utils.compat.optional_deps import HAS_SCIPY
 
-from .base import IOTestMixinBase, IOFormatTestBase
-
-cosmo_instances = [getattr(realizations, name) for name in available]
-cosmo_instances.append("TestToFromTable.setup.<locals>.CosmologyWithKwargs")
-
+from .base import ToFromDirectTestBase, ToFromTestMixinBase
 
 ###############################################################################
 
 
-class ToFromModelTestMixin(IOTestMixinBase):
-    """
-    Tests for a Cosmology[To/From]Format with ``format="astropy.model"``.
+class ToFromModelTestMixin(ToFromTestMixinBase):
+    """Tests for a Cosmology[To/From]Format with ``format="astropy.model"``.
+
     This class will not be directly called by :mod:`pytest` since its name does
     not begin with ``Test``. To activate the contained tests this class must
     be inherited in a subclass. Subclasses must define a :func:`pytest.fixture`
@@ -39,35 +30,15 @@ class ToFromModelTestMixin(IOTestMixinBase):
     See ``TestCosmologyToFromFormat`` or ``TestCosmology`` for examples.
     """
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def method_name(self, cosmo):
         # get methods, ignoring private and dunder
-        methods = set()
-        for n in dir(cosmo):
-            try:  # get method, some will error on ABCs
-                m = getattr(cosmo, n)
-            except NotImplementedError:
-                continue
+        methods = get_redshift_methods(cosmo, include_private=False, include_z2=True)
 
-            if callable(m) and not n.startswith("_"):
-                methods.add(n)
-
-        # sieve out incompatible methods
+        # dynamically detect ABC and optional dependencies
         for n in tuple(methods):
-            # remove non-introspectable methods
-            try:
-                sig = inspect.signature(getattr(cosmo, n))
-            except ValueError:
-                methods.discard(n)
-                continue
+            params = inspect.signature(getattr(cosmo, n)).parameters.keys()
 
-            params = list(sig.parameters.keys())
-            # remove non redshift methods
-            if len(params) == 0 or not params[0].startswith("z"):
-                methods.discard(n)
-                continue
-
-            # dynamically detect ABC and optional dependencies
             ERROR_SEIVE = (NotImplementedError, ValueError)
             #              # ABC                can't introspect for good input
             if not HAS_SCIPY:
@@ -178,8 +149,25 @@ class ToFromModelTestMixin(IOTestMixinBase):
         """
         pass  # there's no partial information with a Model
 
+    @pytest.mark.parametrize("format", [True, False, None, "astropy.model"])
+    def test_is_equivalent_to_model(self, cosmo, method_name, to_format, format):
+        """Test :meth:`astropy.cosmology.Cosmology.is_equivalent`.
 
-class TestToFromModel(IOFormatTestBase, ToFromModelTestMixin):
+        This test checks that Cosmology equivalency can be extended to any
+        Python object that can be converted to a Cosmology -- in this case
+        a model.
+        """
+        if method_name is None:  # no test if no method
+            return
+
+        obj = to_format("astropy.model", method=method_name)
+        assert not isinstance(obj, Cosmology)
+
+        is_equiv = cosmo.is_equivalent(obj, format=format)
+        assert is_equiv is (True if format is not False else False)
+
+
+class TestToFromModel(ToFromDirectTestBase, ToFromModelTestMixin):
     """Directly test ``to/from_model``."""
 
     def setup_class(self):

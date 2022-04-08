@@ -328,7 +328,7 @@ def get_body_barycentric_posvel(body, time, ephemeris=None):
     position, velocity : tuple of `~astropy.coordinates.CartesianRepresentation`
         Tuple of barycentric (ICRS) position and velocity.
 
-    See also
+    See Also
     --------
     get_body_barycentric : to calculate position only.
         This is faster by about a factor two for JPL kernels, but has no
@@ -361,7 +361,7 @@ def get_body_barycentric(body, time, ephemeris=None):
     position : `~astropy.coordinates.CartesianRepresentation`
         Barycentric (ICRS) position of the body in cartesian coordinates
 
-    See also
+    See Also
     --------
     get_body_barycentric_posvel : to calculate both position and velocity.
 
@@ -499,6 +499,10 @@ def get_moon(time, location=None, ephemeris=None):
 
     Notes
     -----
+    The coordinate returned is the apparent position, which is the position of
+    the moon at time *t* minus the light travel time from the moon to the
+    observing *location*.
+
     {_EPHEMERIS_NOTE}
     """
 

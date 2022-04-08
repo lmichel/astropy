@@ -4,23 +4,17 @@
 import pytest
 
 # LOCAL
-import astropy.units as u
-from astropy import cosmology
-from astropy.cosmology import Cosmology, Planck18, realizations
-from astropy.cosmology.core import _COSMOLOGY_CLASSES, Parameter
+from astropy.cosmology import Cosmology
+from astropy.cosmology.core import _COSMOLOGY_CLASSES
 from astropy.cosmology.io.table import from_table, to_table
-from astropy.cosmology.parameters import available
 from astropy.table import QTable, Table, vstack
 
-from .base import IOTestMixinBase, IOFormatTestBase
-
-cosmo_instances = [getattr(realizations, name) for name in available]
-cosmo_instances.append("TestToFromTable.setup.<locals>.CosmologyWithKwargs")
+from .base import ToFromDirectTestBase, ToFromTestMixinBase
 
 ###############################################################################
 
 
-class ToFromTableTestMixin(IOTestMixinBase):
+class ToFromTableTestMixin(ToFromTestMixinBase):
     """
     Tests for a Cosmology[To/From]Format with ``format="astropy.table"``.
     This class will not be directly called by :mod:`pytest` since its name does
@@ -208,8 +202,22 @@ class ToFromTableTestMixin(IOTestMixinBase):
         with pytest.raises(ValueError, match="more than one"):
             from_format(tbls, index=cosmo.name, format="astropy.table")
 
+    @pytest.mark.parametrize("format", [True, False, None, "astropy.table"])
+    def test_is_equivalent_to_table(self, cosmo, to_format, format):
+        """Test :meth:`astropy.cosmology.Cosmology.is_equivalent`.
 
-class TestToFromTable(IOFormatTestBase, ToFromTableTestMixin):
+        This test checks that Cosmology equivalency can be extended to any
+        Python object that can be converted to a Cosmology -- in this case
+        a |Table|.
+        """
+        obj = to_format("astropy.table")
+        assert not isinstance(obj, Cosmology)
+
+        is_equiv = cosmo.is_equivalent(obj, format=format)
+        assert is_equiv is (True if format is not False else False)
+
+
+class TestToFromTable(ToFromDirectTestBase, ToFromTableTestMixin):
     """Directly test ``to/from_table``."""
 
     def setup_class(self):

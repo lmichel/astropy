@@ -4,26 +4,28 @@
 Tests for model evaluation.
 Compare the results of some models with other programs.
 """
+import unittest.mock as mk
+
+import numpy as np
 # pylint: disable=invalid-name, no-member
 import pytest
-import numpy as np
-import unittest.mock as mk
-import astropy.modeling.tabular as tabular_models
-
 from numpy.testing import assert_allclose, assert_equal
 
+import astropy.modeling.tabular as tabular_models
 from astropy import units as u
 from astropy.modeling import fitting, models
-from astropy.modeling.models import Gaussian2D
 from astropy.modeling.bounding_box import ModelBoundingBox
-from astropy.modeling.core import FittableModel
-from astropy.modeling.parameters import Parameter
+from astropy.modeling.core import FittableModel, Model, _ModelMeta
+from astropy.modeling.models import Gaussian2D
+from astropy.modeling.parameters import InputParameterError, Parameter
 from astropy.modeling.polynomial import PolynomialBase
-from astropy.modeling.powerlaws import SmoothlyBrokenPowerLaw1D
-from astropy.modeling.parameters import InputParameterError
+from astropy.modeling.powerlaws import (BrokenPowerLaw1D, ExponentialCutoffPowerLaw1D,
+                                        LogParabola1D, PowerLaw1D, SmoothlyBrokenPowerLaw1D)
+from astropy.modeling.separable import separability_matrix
 from astropy.tests.helper import assert_quantity_allclose
 from astropy.utils import NumpyRNGContext
 from astropy.utils.compat.optional_deps import HAS_SCIPY  # noqa
+
 from .example_models import models_1D, models_2D
 
 
@@ -292,10 +294,15 @@ class Fittable2DModelTester:
             if test_parameters['log_fit']:
                 x = np.logspace(x_lim[0], x_lim[1], self.N)
                 y = np.logspace(y_lim[0], y_lim[1], self.M)
+                x_test = np.logspace(x_lim[0], x_lim[1], self.N*10)
+                y_test = np.logspace(y_lim[0], y_lim[1], self.M*10)
         else:
             x = np.linspace(x_lim[0], x_lim[1], self.N)
             y = np.linspace(y_lim[0], y_lim[1], self.M)
+            x_test = np.linspace(x_lim[0], x_lim[1], self.N*10)
+            y_test = np.linspace(y_lim[0], y_lim[1], self.M*10)
         xv, yv = np.meshgrid(x, y)
+        xv_test, yv_test = np.meshgrid(x_test, y_test)
 
         try:
             model_with_deriv = create_model(model_class, test_parameters,
@@ -327,9 +334,13 @@ class Fittable2DModelTester:
         fitter_no_deriv = fitting.LevMarLSQFitter()
         new_model_no_deriv = fitter_no_deriv(model_no_deriv, xv, yv, data,
                                              estimate_jacobian=True)
-        assert_allclose(new_model_with_deriv.parameters,
-                        new_model_no_deriv.parameters,
-                        rtol=0.1)
+        assert_allclose(new_model_with_deriv(xv_test, yv_test),
+                        new_model_no_deriv(xv_test, yv_test),
+                        rtol=1e-2)
+        if model_class != Gaussian2D:
+            assert_allclose(new_model_with_deriv.parameters,
+                            new_model_no_deriv.parameters,
+                            rtol=0.1)
 
 
 class Fittable1DModelTester:
@@ -343,6 +354,16 @@ class Fittable1DModelTester:
 
     This can be used as a base class for user defined model testing.
     """
+
+    # These models will fail fitting test, because built in fitting data
+    #   will produce non-finite values
+    _non_finite_models = [
+        BrokenPowerLaw1D,
+        ExponentialCutoffPowerLaw1D,
+        LogParabola1D,
+        PowerLaw1D,
+        SmoothlyBrokenPowerLaw1D
+    ]
 
     def setup_class(self):
         self.N = 100
@@ -476,6 +497,9 @@ class Fittable1DModelTester:
         Test the derivative of a model by comparing results with an estimated
         derivative.
         """
+
+        if model_class in self._non_finite_models:
+            return
 
         x_lim = test_parameters['x_lim']
 
@@ -1014,3 +1038,58 @@ def test_SmoothlyBrokenPowerLaw1D_fit_deriv():
                                          estimate_jacobian=True)
     assert_allclose(new_model_with_deriv.parameters,
                     new_model_no_deriv.parameters, atol=0.5)
+
+
+class _ExtendedModelMeta(_ModelMeta):
+    @classmethod
+    def __prepare__(mcls, name, bases, **kwds):
+        # this shows the parent class machinery still applies
+        namespace = super().__prepare__(name, bases, **kwds)
+        # the custom bit
+        namespace.update(kwds)
+        return namespace
+
+    model = models.Gaussian1D(1.5, 2.5, 3.5)
+    assert model.amplitude._description == "Amplitude (peak value) of the Gaussian"
+    assert model.mean._description == "Position of peak (Gaussian)"
+
+
+def test_metaclass_kwargs():
+    """Test can pass kwargs to Models"""
+    class ClassModel(FittableModel, flag="flag"):
+        def evaluate(self):
+            pass
+
+    # Nothing further to test, just making the class is good enough.
+
+
+def test_submetaclass_kwargs():
+    """Test can pass kwargs to Model subclasses."""
+    class ClassModel(FittableModel, metaclass=_ExtendedModelMeta, flag="flag"):
+        def evaluate(self):
+            pass
+
+    assert ClassModel.flag == "flag"
+
+
+class ModelDefault(Model):
+    slope = Parameter()
+    intercept = Parameter()
+    _separable = False
+
+    @staticmethod
+    def evaluate(x, slope, intercept):
+        return slope * x + intercept
+
+
+class ModelCustom(ModelDefault):
+    def _calculate_separability_matrix(self):
+        return np.array([[0, ]])
+
+
+def test_custom_separability_matrix():
+    original = separability_matrix(ModelDefault(slope=1, intercept=2))
+    assert original.all()
+
+    custom = separability_matrix(ModelCustom(slope=1, intercept=2))
+    assert not custom.any()

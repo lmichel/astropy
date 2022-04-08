@@ -10,11 +10,12 @@ via these methods.
 
 import astropy.cosmology.units as cu
 import astropy.units as u
-from astropy.cosmology.core import _COSMOLOGY_CLASSES, Cosmology
 from astropy.cosmology.connect import convert_registry
+from astropy.cosmology.core import _COSMOLOGY_CLASSES, Cosmology
 from astropy.io.misc.yaml import AstropyDumper, AstropyLoader, dump, load
 
 from .mapping import from_mapping
+from .utils import FULLQUALNAME_SUBSTITUTIONS as QNS
 
 __all__ = []  # nothing is publicly scoped
 
@@ -40,7 +41,7 @@ def yaml_representer(tag):
         Function to construct :mod:`yaml` representation of |Cosmology| object.
     """
     def representer(dumper, obj):
-        """Cosmology yaml representer function.
+        """Cosmology yaml representer function for {}.
 
         Parameters
         ----------
@@ -60,6 +61,8 @@ def yaml_representer(tag):
         map["meta"] = tuple(map["meta"].items())
 
         return dumper.represent_mapping(tag, map)
+
+    representer.__doc__ = representer.__doc__.format(tag)
 
     return representer
 
@@ -109,7 +112,8 @@ def register_cosmology_yaml(cosmo_cls):
     ----------
     cosmo_cls : `~astropy.cosmology.Cosmology` class
     """
-    tag = f"!{cosmo_cls.__module__}.{cosmo_cls.__qualname__}"
+    fqn = f"{cosmo_cls.__module__}.{cosmo_cls.__qualname__}"
+    tag = "!" + QNS.get(fqn, fqn)  # Possibly sub fully qualified name for a preferred path
 
     AstropyDumper.add_representer(cosmo_cls, yaml_representer(tag))
     AstropyLoader.add_constructor(tag, yaml_constructor(cosmo_cls))
@@ -119,20 +123,38 @@ def register_cosmology_yaml(cosmo_cls):
 # Unified-I/O Functions
 
 
-def from_yaml(yml):
+def from_yaml(yml, *, cosmology=None):
     """Load `~astropy.cosmology.Cosmology` from :mod:`yaml` object.
 
     Parameters
     ----------
     yml : str
         :mod:`yaml` representation of |Cosmology| object
+    cosmology : str, `~astropy.cosmology.Cosmology` class, or None (optional, keyword-only)
+        The expected cosmology class (or string name thereof). This argument is
+        is only checked for correctness if not `None`.
 
     Returns
     -------
     `~astropy.cosmology.Cosmology` subclass instance
+
+    Raises
+    ------
+    TypeError
+        If the |Cosmology| object loaded from ``yml`` is not an instance of
+        the ``cosmology`` (and ``cosmology`` is not `None`).
     """
     with u.add_enabled_units(cu):
-        return load(yml)
+        cosmo = load(yml)
+
+    # Check argument `cosmology`, if not None
+    # This kwarg is required for compatibility with |Cosmology.from_format|
+    if isinstance(cosmology, str):
+        cosmology = _COSMOLOGY_CLASSES[cosmology]
+    if cosmology is not None and not isinstance(cosmo, cosmology):
+        raise TypeError(f"cosmology {cosmo} is not an {cosmology} instance.")
+
+    return cosmo
 
 
 def to_yaml(cosmology, *args):

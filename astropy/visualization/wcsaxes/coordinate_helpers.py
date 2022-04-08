@@ -408,7 +408,7 @@ class CoordinateHelper:
             Distance in points between tick and label.
         exclude_overlapping : bool, optional
             Whether to exclude tick labels that overlap over each other.
-        kwargs
+        **kwargs
             Other keyword arguments are passed to :class:`matplotlib.text.Text`.
         """
         if size is not None:
@@ -457,7 +457,7 @@ class CoordinateHelper:
             The axis label text.
         minpad : float, optional
             The padding for the label in terms of axis label font size.
-        kwargs
+        **kwargs
             Keywords are passed to :class:`matplotlib.text.Text`. These
             can include keywords to set the ``color``, ``size``, ``weight``, and
             other text properties.
@@ -652,7 +652,7 @@ class CoordinateHelper:
         # Look up parent axes' transform from data to figure coordinates.
         #
         # See:
-        # https://matplotlib.org/users/transforms_tutorial.html#the-transformation-pipeline
+        # https://matplotlib.org/stable/tutorials/advanced/transforms_tutorial.html#the-transformation-pipeline
         transData = self.parent_axes.transData
         invertedTransLimits = transData.inverted()
 

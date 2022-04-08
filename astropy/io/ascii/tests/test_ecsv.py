@@ -15,21 +15,17 @@ import pytest
 import numpy as np
 import yaml
 
-from astropy.table import Table, Column, QTable, NdarrayMixin
+from astropy.table import Table, Column, QTable
 from astropy.table.table_helpers import simple_table
-from astropy.coordinates import (SkyCoord, Latitude, Longitude, Angle, EarthLocation,
-                                 SphericalRepresentation, CartesianRepresentation,
-                                 SphericalCosLatDifferential)
-from astropy.time import Time, TimeDelta
 from astropy.units import allclose as quantity_allclose
 from astropy.units import QuantityInfo
 
-from astropy.utils.exceptions import AstropyUserWarning
-
-from astropy.io.ascii.ecsv import DELIMITERS
+from astropy.utils.compat import NUMPY_LT_1_19_1
+from astropy.io.ascii.ecsv import DELIMITERS, InvalidEcsvDatatypeWarning
 from astropy.io import ascii
 from astropy import units as u
 
+from astropy.io.tests.mixin_columns import mixin_cols, compare_attrs
 from .common import TEST_DIR
 
 DTYPES = ['bool', 'int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32',
@@ -271,101 +267,6 @@ def assert_objects_equal(obj1, obj2, attrs, compare_class=True):
             assert np.all(obj1 == obj2)
 
 
-# TODO: unify with the very similar tests in fits/tests/test_connect.py
-# and misc/tests/test_hd5f.py.
-el = EarthLocation(x=[1, 2] * u.km, y=[3, 4] * u.km, z=[5, 6] * u.km)
-sr = SphericalRepresentation(
-    [0, 1]*u.deg, [2, 3]*u.deg, 1*u.kpc)
-cr = CartesianRepresentation(
-    [0, 1]*u.pc, [4, 5]*u.pc, [8, 6]*u.pc)
-sd = SphericalCosLatDifferential(
-    [0, 1]*u.mas/u.yr, [0, 1]*u.mas/u.yr, 10*u.km/u.s)
-srd = SphericalRepresentation(sr, differentials=sd)
-sc = SkyCoord([1, 2], [3, 4], unit='deg,deg', frame='fk4',
-              obstime='J1990.5')
-scd = SkyCoord([1, 2], [3, 4], [5, 6], unit='deg,deg,m', frame='fk4',
-               obstime=['J1990.5'] * 2)
-scdc = scd.copy()
-scdc.representation_type = 'cartesian'
-scpm = SkyCoord([1, 2], [3, 4], [5, 6], unit='deg,deg,pc',
-                pm_ra_cosdec=[7, 8]*u.mas/u.yr, pm_dec=[9, 10]*u.mas/u.yr)
-scpmrv = SkyCoord([1, 2], [3, 4], [5, 6], unit='deg,deg,pc',
-                  pm_ra_cosdec=[7, 8]*u.mas/u.yr, pm_dec=[9, 10]*u.mas/u.yr,
-                  radial_velocity=[11, 12]*u.km/u.s)
-scrv = SkyCoord([1, 2], [3, 4], [5, 6], unit='deg,deg,pc',
-                radial_velocity=[11, 12]*u.km/u.s)
-tm = Time([51000.5, 51001.5], format='mjd', scale='tai', precision=5, location=el[0])
-tm2 = Time(tm, format='iso')
-tm3 = Time(tm, location=el)
-tm3.info.serialize_method['ecsv'] = 'jd1_jd2'
-obj = Column([{'a': 1}, {'b': [2]}], dtype='object')
-
-# NOTE: in the test below the name of the column "x" for the Quantity is
-# important since it tests the fix for #10215 (namespace clash, where "x"
-# clashes with "el.x").
-mixin_cols = {
-    'tm': tm,
-    'tm2': tm2,
-    'tm3': tm3,
-    'dt': TimeDelta([1, 2] * u.day),
-    'sc': sc,
-    'scd': scd,
-    'scdc': scdc,
-    'scpm': scpm,
-    'scpmrv': scpmrv,
-    'scrv': scrv,
-    'x': [1, 2] * u.m,
-    'qdb': [10, 20] * u.dB(u.mW),
-    'qdex': [4.5, 5.5] * u.dex(u.cm / u.s**2),
-    'qmag': [21, 22] * u.ABmag,
-    'lat': Latitude([1, 2] * u.deg),
-    'lon': Longitude([1, 2] * u.deg, wrap_angle=180. * u.deg),
-    'ang': Angle([1, 2] * u.deg),
-    'el': el,
-    'sr': sr,
-    'cr': cr,
-    'sd': sd,
-    'srd': srd,
-    'nd': NdarrayMixin([1, 2]),
-    'obj': obj
-}
-
-time_attrs = ['value', 'shape', 'format', 'scale', 'precision',
-              'in_subfmt', 'out_subfmt', 'location']
-compare_attrs = {
-    'c1': ['data'],
-    'c2': ['data'],
-    'tm': time_attrs,
-    'tm2': time_attrs,
-    'tm3': time_attrs,
-    'dt': ['shape', 'value', 'format', 'scale'],
-    'sc': ['ra', 'dec', 'representation_type', 'frame.name'],
-    'scd': ['ra', 'dec', 'distance', 'representation_type', 'frame.name'],
-    'scdc': ['x', 'y', 'z', 'representation_type', 'frame.name'],
-    'scpm': ['ra', 'dec', 'distance', 'pm_ra_cosdec', 'pm_dec',
-             'representation_type', 'frame.name'],
-    'scpmrv': ['ra', 'dec', 'distance', 'pm_ra_cosdec', 'pm_dec',
-               'radial_velocity', 'representation_type', 'frame.name'],
-    'scrv': ['ra', 'dec', 'distance', 'radial_velocity', 'representation_type',
-             'frame.name'],
-    'x': ['value', 'unit'],
-    'qdb': ['value', 'unit'],
-    'qdex': ['value', 'unit'],
-    'qmag': ['value', 'unit'],
-    'lon': ['value', 'unit', 'wrap_angle'],
-    'lat': ['value', 'unit'],
-    'ang': ['value', 'unit'],
-    'el': ['x', 'y', 'z', 'ellipsoid'],
-    'nd': ['data'],
-    'sr': ['lon', 'lat', 'distance'],
-    'cr': ['x', 'y', 'z'],
-    'sd': ['d_lon_coslat', 'd_lat', 'd_distance'],
-    'srd': ['lon', 'lat', 'distance', 'differentials.s.d_lon_coslat',
-            'differentials.s.d_lat', 'differentials.s.d_distance'],
-    'obj': []
-}
-
-
 def test_ecsv_mixins_ascii_read_class():
     """Ensure that ascii.read(ecsv_file) returns the correct class
     (QTable if any Quantity subclasses, Table otherwise).
@@ -508,7 +409,8 @@ def test_ecsv_mixins_per_column(table_cls, name_col, ndim):
 
     for colname in t.colnames:
         assert len(t2[colname].shape) == ndim
-        assert_objects_equal(t[colname], t2[colname], compare_attrs[colname])
+        compare = ['data'] if colname in ('c1', 'c2') else compare_attrs[colname]
+        assert_objects_equal(t[colname], t2[colname], compare)
 
     # Special case to make sure Column type doesn't leak into Time class data
     if name.startswith('tm'):
@@ -677,7 +579,7 @@ def test_multidim_unknown_subtype(subtype):
 a
 [1,2]
 [3,4]"""
-    with pytest.warns(AstropyUserWarning,
+    with pytest.warns(InvalidEcsvDatatypeWarning,
                       match=rf"unexpected subtype '{subtype}' set for column 'a'"):
         t = ascii.read(txt, format='ecsv')
 
@@ -727,8 +629,29 @@ fail
         Table.read(txt, format='ascii.ecsv')
 
 
+def test_read_bad_datatype():
+    """Test a malformed ECSV file"""
+    txt = """\
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: a, datatype: object}
+# schema: astropy-2.0
+a
+fail
+[3,4]"""
+    with pytest.warns(InvalidEcsvDatatypeWarning,
+                      match="unexpected datatype 'object' of column 'a' is not in allowed"):
+        t = Table.read(txt, format='ascii.ecsv')
+    assert t['a'][0] == "fail"
+    assert type(t['a'][1]) is str
+    assert type(t['a'].dtype) == np.dtype("O")
+
+
+@pytest.mark.skipif(NUMPY_LT_1_19_1,
+                    reason="numpy cannot parse 'complex' as string until 1.19+")
 def test_read_complex():
-    """Test an ECSV file with a complex column"""
+    """Test an ECSV v1.0 file with a complex column"""
     txt = """\
 # %ECSV 1.0
 # ---
@@ -738,9 +661,30 @@ def test_read_complex():
 a
 1+1j
 2+2j"""
-    match = "datatype 'complex' of column 'a' is not in allowed values"
-    with pytest.raises(ValueError, match=match):
-        Table.read(txt, format='ascii.ecsv')
+
+    with pytest.warns(InvalidEcsvDatatypeWarning,
+                      match="unexpected datatype 'complex' of column 'a' is not in allowed"):
+        t = Table.read(txt, format='ascii.ecsv')
+    assert t['a'].dtype.type is np.complex128
+
+
+def test_read_str():
+    """Test an ECSV file with a 'str' instead of 'string' datatype """
+    txt = """\
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: a, datatype: str}
+# schema: astropy-2.0
+a
+sometext
+S"""  # also testing single character text
+
+    with pytest.warns(InvalidEcsvDatatypeWarning,
+                      match="unexpected datatype 'str' of column 'a' is not in allowed"):
+        t = Table.read(txt, format='ascii.ecsv')
+    assert isinstance(t['a'][1], str)
+    assert isinstance(t['a'][0], np.str_)
 
 
 def test_read_bad_datatype_for_object_subtype():
@@ -755,22 +699,6 @@ a
 fail
 [3,4]"""
     match = "column 'a' failed to convert: datatype of column 'a' must be \"string\""
-    with pytest.raises(ValueError, match=match):
-        Table.read(txt, format='ascii.ecsv')
-
-
-def test_read_bad_datatype():
-    """Test a malformed ECSV file"""
-    txt = """\
-# %ECSV 1.0
-# ---
-# datatype:
-# - {name: a, datatype: object}
-# schema: astropy-2.0
-a
-fail
-[3,4]"""
-    match = r"column 'a' is not in allowed values \('bool', 'int8', 'int16', 'int32'"
     with pytest.raises(ValueError, match=match):
         Table.read(txt, format='ascii.ecsv')
 

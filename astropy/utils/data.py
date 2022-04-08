@@ -12,8 +12,8 @@ import os
 import io
 import re
 import shutil
-import socket
-import ssl
+# import ssl moved inside functions using ssl to avoid import failure
+# when running in pyodide/Emscripten
 import sys
 import urllib.request
 import urllib.error
@@ -1014,7 +1014,7 @@ def check_free_space_in_dir(path, size):
         A proposed filesize. If not a Quantity, assume it is in bytes.
 
     Raises
-    -------
+    ------
     OSError
         There is not enough room on the filesystem.
     """
@@ -1048,6 +1048,8 @@ def _build_urlopener(ftp_tls=False, ssl_context=None, allow_insecure=False):
     """
     Helper for building a `urllib.request.build_opener` which handles TLS/SSL.
     """
+    # Import ssl here to avoid import failure when running in pyodide/Emscripten
+    import ssl
 
     ssl_context = dict(it for it in ssl_context) if ssl_context else {}
     cert_chain = {}
@@ -1087,6 +1089,8 @@ def _build_urlopener(ftp_tls=False, ssl_context=None, allow_insecure=False):
 def _try_url_open(source_url, timeout=None, http_headers=None, ftp_tls=False,
                   ssl_context=None, allow_insecure=False):
     """Helper for opening a URL while handling TLS/SSL verification issues."""
+    # Import ssl here to avoid import failure when running in pyodide/Emscripten
+    import ssl
 
     # Always try first with a secure connection
     # _build_urlopener uses lru_cache, so the ssl_context argument must be
@@ -1378,13 +1382,6 @@ def download_file(remote_url, cache=False, show_progress=True, timeout=None,
                                      '. requested URL: '
                                      + remote_url)
                 e.reason.args = (e.reason.errno, e.reason.strerror)
-            errors[source_url] = e
-        except socket.timeout as e:
-            # this isn't supposed to happen, but occasionally a socket.timeout
-            # gets through.  It's supposed to be caught in urllib and raised
-            # in this way, but for some reason in mysterious circumstances it
-            # doesn't (or didn't in python2?). So we'll just re-raise it here
-            # instead.
             errors[source_url] = e
     else:   # No success
         if not sources:

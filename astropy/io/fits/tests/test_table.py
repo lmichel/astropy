@@ -5,6 +5,8 @@ import copy
 import gc
 import pickle
 import re
+import sys
+import warnings
 
 import pytest
 import numpy as np
@@ -19,9 +21,10 @@ except ImportError:
 from astropy.io import fits
 from astropy.table import Table
 from astropy.units import UnitsWarning, Unit, UnrecognizedUnit
+from astropy.utils.compat import NUMPY_LT_1_22, NUMPY_LT_1_22_1
 from astropy.utils.exceptions import AstropyDeprecationWarning, AstropyUserWarning
 
-from astropy.io.fits.column import Delayed, NUMPY2FITS
+from astropy.io.fits.column import ColumnAttribute, Delayed, NUMPY2FITS
 from astropy.io.fits.util import decode_ascii
 from astropy.io.fits.verify import VerifyError
 from . import FitsTestCase
@@ -102,6 +105,22 @@ def comparerecords(a, b):
                 print(f'field {i} differs')
                 return False
     return True
+
+
+def _assert_attr_col(new_tbhdu, tbhdu):
+    """
+    Helper function to compare column attributes
+    """
+    # Double check that the headers are equivalent
+    assert tbhdu.columns.names == new_tbhdu.columns.names
+    attrs = [k for k, v in fits.Column.__dict__.items()
+             if isinstance(v, ColumnAttribute)]
+    for name in tbhdu.columns.names:
+        col = tbhdu.columns[name]
+        new_col = new_tbhdu.columns[name]
+        for attr in attrs:
+            if getattr(col, attr) and getattr(new_col, attr):
+                assert getattr(col, attr) == getattr(new_col, attr)
 
 
 class TestTableFunctions(FitsTestCase):
@@ -949,6 +968,53 @@ class TestTableFunctions(FitsTestCase):
             assert header['TNULL1'] == 2
             assert header['TNULL2'] == 'b'
             assert header['TNULL3'] == 2.3
+
+    def test_multidimension_table_from_numpy_rec_columns(self):
+        """Regression test for https://github.com/astropy/astropy/issues/5280
+        and https://github.com/astropy/astropy/issues/5287
+
+        multidimentional tables can now be written with the correct TDIM.
+        Author: Stephen Bailey.
+        """
+
+        dtype = [
+            (str('x'), (str, 5)),        # 1D column of 5-character strings
+            (str('y'), (str, 3), (4,)),  # 2D column; each row is four 3-char strings
+        ]
+        data = np.zeros(2, dtype=dtype)
+        data['x'] = ['abcde', 'xyz']
+        data['y'][0] = ['A', 'BC', 'DEF', '123']
+        data['y'][1] = ['X', 'YZ', 'PQR', '999']
+        table = Table(data)
+
+        # Test convenience functions io.fits.writeto / getdata
+        fits.writeto(self.temp('test.fits'), data)
+        dx = fits.getdata(self.temp('test.fits'))
+        assert data['x'].dtype == dx['x'].dtype
+        assert data['y'].dtype == dx['y'].dtype
+        assert np.all(data['x'] == dx['x']), 'x: {} != {}'.format(data['x'], dx['x'])
+        assert np.all(data['y'] == dx['y']), 'y: {} != {}'.format(data['y'], dx['y'])
+
+        # Test fits.BinTableHDU(data) and avoid convenience functions
+        hdu0 = fits.PrimaryHDU()
+        hdu1 = fits.BinTableHDU(data)
+        hx = fits.HDUList([hdu0, hdu1])
+        hx.writeto(self.temp('test2.fits'))
+        fx = fits.open(self.temp('test2.fits'))
+        dx = fx[1].data
+        fx.close()
+        assert data['x'].dtype == dx['x'].dtype
+        assert data['y'].dtype == dx['y'].dtype
+        assert np.all(data['x'] == dx['x']), 'x: {} != {}'.format(data['x'], dx['x'])
+        assert np.all(data['y'] == dx['y']), 'y: {} != {}'.format(data['y'], dx['y'])
+
+        # Test Table write and read
+        table.write(self.temp('test3.fits'))
+        tx = Table.read(self.temp('test3.fits'), character_as_bytes=False)
+        assert table['x'].dtype == tx['x'].dtype
+        assert table['y'].dtype == tx['y'].dtype
+        assert np.all(table['x'] == tx['x']), 'x: {} != {}'.format(table['x'], tx['x'])
+        assert np.all(table['y'] == tx['y']), 'y: {} != {}'.format(table['y'], tx['y'])
 
     def test_mask_array(self):
         t = fits.open(self.data('table.fits'))
@@ -2133,28 +2199,26 @@ class TestTableFunctions(FitsTestCase):
         assert comparerecords(s2, s3)
         assert comparerecords(s3, s4)
 
-    def test_dump_load_round_trip(self):
+    @pytest.mark.parametrize('tablename', ['table.fits', 'tb.fits'])
+    def test_dump_load_round_trip(self, tablename):
         """
         A simple test of the dump/load methods; dump the data, column, and
         header files and try to reload the table from them.
         """
 
-        hdul = fits.open(self.data('table.fits'))
-        tbhdu = hdul[1]
-        datafile = self.temp('data.txt')
-        cdfile = self.temp('coldefs.txt')
-        hfile = self.temp('header.txt')
+        with fits.open(self.data(tablename)) as hdul:
+            tbhdu = hdul[1]
+            datafile = self.temp('data.txt')
+            cdfile = self.temp('coldefs.txt')
+            hfile = self.temp('header.txt')
 
-        tbhdu.dump(datafile, cdfile, hfile)
+            tbhdu.dump(datafile, cdfile, hfile)
 
-        new_tbhdu = fits.BinTableHDU.load(datafile, cdfile, hfile)
+            new_tbhdu = fits.BinTableHDU.load(datafile, cdfile, hfile)
 
-        assert comparerecords(tbhdu.data, new_tbhdu.data)
+            assert comparerecords(tbhdu.data, new_tbhdu.data)
 
-        # Double check that the headers are equivalent
-        assert str(tbhdu.header) == str(new_tbhdu.header)
-
-        hdul.close()
+            _assert_attr_col(new_tbhdu, hdul[1])
 
     def test_dump_load_array_colums(self):
         """
@@ -2894,6 +2958,8 @@ class TestVLATables(FitsTestCase):
         for code in ('PJ()', 'QJ()'):
             test(code)
 
+    @pytest.mark.skipif(not NUMPY_LT_1_22 and NUMPY_LT_1_22_1 and sys.platform == 'win32',
+                        reason='https://github.com/numpy/numpy/issues/20699')
     def test_copy_vla(self):
         """
         Regression test for https://github.com/spacetelescope/PyFITS/issues/47
@@ -3436,7 +3502,7 @@ def test_new_column_attributes_preserved(tmpdir):
     hdu.writeto(filename)
 
     # Make sure we don't emit a warning in this case
-    with pytest.warns(None) as warning_list:
+    with warnings.catch_warnings(record=True) as warning_list:
         with fits.open(filename) as hdul:
             hdu2 = hdul[1]
     assert len(warning_list) == 0

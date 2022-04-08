@@ -3,17 +3,16 @@
 Test separability of models.
 
 """
+import numpy as np
 # pylint: disable=invalid-name
 import pytest
-import numpy as np
 from numpy.testing import assert_allclose
 
 from astropy.modeling import custom_model, models
-from astropy.modeling.models import Mapping
-from astropy.modeling.separable import (_coord_matrix, is_separable, _cdot,
-                                        _cstack, _arith_oper, separability_matrix)
 from astropy.modeling.core import ModelDefinitionError
-
+from astropy.modeling.models import Mapping
+from astropy.modeling.separable import (_arith_oper, _cdot, _coord_matrix, _cstack, is_separable,
+                                        separability_matrix)
 
 sh1 = models.Shift(1, name='shift1')
 sh2 = models.Shift(2, name='sh2')
@@ -26,6 +25,13 @@ rot = models.Rotation2D(2, name='rotation')
 p2 = models.Polynomial2D(1, name='p2')
 p22 = models.Polynomial2D(2, name='p22')
 p1 = models.Polynomial1D(1, name='p1')
+
+
+cm_4d_expected = (np.array([False, False, True, True]),
+                  np.array([[True,  True,  False, False],
+                            [True,  True,  False, False],
+                            [False, False, True,  False],
+                            [False, False, False, True]]))
 
 
 compound_models = {
@@ -52,7 +58,17 @@ compound_models = {
     'cm7': (map2 | p2 & sh1,
             (np.array([False, True]),
              np.array([[True, False], [False, True]]))
-            )
+            ),
+    'cm8': (rot & (sh1 & sh2), cm_4d_expected),
+    'cm9': (rot & sh1 & sh2, cm_4d_expected),
+    'cm10': ((rot & sh1) & sh2, cm_4d_expected),
+    'cm11': (rot & sh1 & (scl1 & scl2),
+             (np.array([False, False, True, True, True]),
+              np.array([[True,  True,  False, False, False],
+                        [True,  True,  False, False, False],
+                        [False, False, True,  False, False],
+                        [False, False, False, True,  False],
+                        [False, False, False, False, True]]))),
 }
 
 

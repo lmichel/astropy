@@ -66,11 +66,8 @@ To see a list of the available read/write file formats:
       Format   Read Write Auto-identify
     ---------- ---- ----- -------------
     ascii.ecsv  Yes   Yes           Yes
-      myformat  Yes   Yes           Yes
 
 This list will include both built-in and registered 3rd-party formats.
-"myformat" is from an `example 3rd-party package
-<https://github.com/astropy/astropy/tree/main/astropy/cosmology/tests/mypackage>`_.
 
 When a subclass of |Cosmology| is used to read a file, the subclass will provide
 a keyword argument ``cosmology=<class>`` to the registered read method. The
@@ -95,19 +92,16 @@ To see the a list of the available conversion formats:
 
     >>> from astropy.cosmology import Cosmology
     >>> Cosmology.to_format.list_formats()
-        Format    Read Write Auto-identify
-    ------------- ---- ----- -------------
-    astropy.model  Yes   Yes           Yes
-      astropy.row  Yes   Yes           Yes
-    astropy.table  Yes   Yes           Yes
-          mapping  Yes   Yes           Yes
-        mypackage  Yes   Yes           Yes
-             yaml  Yes   Yes            No
+          Format      Read Write Auto-identify
+    ----------------- ---- ----- -------------
+    astropy.cosmology  Yes   Yes           Yes
+        astropy.model  Yes   Yes           Yes
+          astropy.row  Yes   Yes           Yes
+        astropy.table  Yes   Yes           Yes
+              mapping  Yes   Yes           Yes
+                 yaml  Yes   Yes            No
 
 This list will include both built-in and registered 3rd-party formats.
-For instance, in the above, "mapping" is built-in while "mypackage" and
-is from an `example 3rd-party package
-<https://github.com/astropy/astropy/tree/main/astropy/cosmology/tests/mypackage>`_.
 
 |Cosmology.to_format| / |Cosmology.from_format| parse a Cosmology to/from
 another python object. This can be useful for e.g., iterating through an MCMC
@@ -123,7 +117,7 @@ instances between packages!
     >>> from astropy.cosmology import Planck18
     >>> cm = Planck18.to_format("mapping")
     >>> cm
-    {'cosmology': <class 'astropy.cosmology.flrw.FlatLambdaCDM'>,
+    {'cosmology': <class 'astropy.cosmology.flrw.lambdacdm.FlatLambdaCDM'>,
      'name': 'Planck18',
      'H0': <Quantity 67.66 km / (Mpc s)>,
      'Om0': 0.30966,
@@ -259,8 +253,7 @@ a ``*args`` to absorb unneeded information passed by
     >>> from astropy.table import QTable
 
     >>> def to_table_row(cosmology, *args):
-    ...     p = cosmology.to_format("mapping")
-    ...     p["cosmology"] = p["cosmology"].__qualname__  # as string
+    ...     p = cosmology.to_format("mapping", cosmology_as_str=True)
     ...     meta = p.pop("meta")
     ...     # package parameters into lists for Table parsing
     ...     params = {k: [v] for k, v in p.items()}
@@ -363,8 +356,7 @@ boolean flag "overwrite" to set behavior for existing files. Note that
 .. code-block:: python
 
     >>> def write_json(cosmology, file, *, overwrite=False, **kwargs):
-    ...    data = cosmology.to_format("mapping")  # start by turning into dict
-    ...    data["cosmology"] = data["cosmology"].__name__  # change class field to str
+    ...    data = cosmology.to_format("mapping", cosmology_as_str=True)  # start by turning into dict
     ...    # serialize Quantity
     ...    for k, v in data.items():
     ...        if isinstance(v, u.Quantity):

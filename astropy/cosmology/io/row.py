@@ -3,11 +3,9 @@
 import copy
 from collections import defaultdict
 
-import numpy as np
-
-from astropy.table import Row, QTable
 from astropy.cosmology.connect import convert_registry
 from astropy.cosmology.core import Cosmology
+from astropy.table import QTable, Row
 
 from .mapping import from_mapping
 
@@ -91,7 +89,7 @@ def to_row(cosmology, *args, cosmology_in_meta=False, table_cls=QTable):
     *args
         Not used. Needed for compatibility with
         `~astropy.io.registry.UnifiedReadWriteMethod`
-    table_cls: type (optional, keyword-only)
+    table_cls : type (optional, keyword-only)
         Astropy :class:`~astropy.table.Table` class or subclass type to use.
         Default is :class:`~astropy.table.QTable`.
     cosmology_in_meta : bool

@@ -29,7 +29,7 @@ from astropy.utils import minversion, isiterable
 from astropy.units import allclose as quantity_allclose
 from astropy.io import fits
 from astropy.wcs import WCS
-from astropy.io.misc.asdf.tags.helpers import skycoord_equal
+from astropy.coordinates.tests.helper import skycoord_equal
 from astropy.utils.compat.optional_deps import HAS_SCIPY  # noqa
 
 RA = 1.0 * u.deg
@@ -1886,10 +1886,10 @@ def test_match_to_catalog_3d_and_sky():
 
     idx, angle, quantity = cfk5_J1950.match_to_catalog_3d(cfk5_default)
     npt.assert_array_equal(idx, [0, 1, 2, 3])
-    assert_allclose(angle, 0*u.deg, atol=1e-15*u.deg, rtol=0)
+    assert_allclose(angle, 0*u.deg, atol=2e-15*u.deg, rtol=0)
     assert_allclose(quantity, 0*u.kpc, atol=1e-15*u.kpc, rtol=0)
 
     idx, angle, distance = cfk5_J1950.match_to_catalog_sky(cfk5_default)
     npt.assert_array_equal(idx, [0, 1, 2, 3])
-    assert_allclose(angle, 0 * u.deg, atol=1e-15*u.deg, rtol=0)
-    assert_allclose(distance, 0*u.kpc, atol=1e-15*u.kpc, rtol=0)
+    assert_allclose(angle, 0 * u.deg, atol=2e-15*u.deg, rtol=0)
+    assert_allclose(distance, 0*u.kpc, atol=2e-15*u.kpc, rtol=0)

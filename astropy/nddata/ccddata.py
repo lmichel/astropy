@@ -79,7 +79,7 @@ class CCDData(NDDataArray):
     information for a single CCD image.
 
     Parameters
-    -----------
+    ----------
     data : `~astropy.nddata.CCDData`-like or array-like
         The actual data contained in this `~astropy.nddata.CCDData` object.
         Note that the data will always be saved by *reference*, so you should
@@ -298,7 +298,7 @@ class CCDData(NDDataArray):
             .. versionadded:: 3.1
 
         Raises
-        -------
+        ------
         ValueError
             - If ``self.mask`` is set but not a `numpy.ndarray`.
             - If ``self.uncertainty`` is set but not a astropy uncertainty type.
@@ -535,10 +535,11 @@ def fits_ccddata_reader(filename, hdu=0, unit=None, hdu_uncertainty='UNCERT',
     filename : str
         Name of fits file.
 
-    hdu : int, optional
-        FITS extension from which CCDData should be initialized. If zero and
-        and no data in the primary extension, it will search for the first
-        extension with data. The header will be added to the primary header.
+    hdu : int, str, tuple of (str, int), optional
+        Index or other identifier of the Header Data Unit of the FITS
+        file from which CCDData should be initialized. If zero and
+        no data in the primary HDU, it will search for the first
+        extension HDU with data. The header will be added to the primary HDU.
         Default is ``0``.
 
     unit : `~astropy.units.Unit`, optional
@@ -694,7 +695,7 @@ def fits_ccddata_writer(
         All additional keywords are passed to :py:mod:`astropy.io.fits`
 
     Raises
-    -------
+    ------
     ValueError
         - If ``self.mask`` is set but not a `numpy.ndarray`.
         - If ``self.uncertainty`` is set but not a

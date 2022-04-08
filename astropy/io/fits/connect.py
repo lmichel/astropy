@@ -152,12 +152,13 @@ def read_table_fits(input, hdu=None, astropy_native=False, memmap=False,
         ``U``) internally, you should set this to `False`, but note that this
         will use more memory. If set to `False`, string columns will not be
         memory-mapped even if ``memmap`` is `True`.
-    unit_parse_strict: str, optional
+    unit_parse_strict : str, optional
         Behaviour when encountering invalid column units in the FITS header.
-        Default is "silent", which will create a
+        Default is "warn", which will emit a ``UnitsWarning`` and create a
         :class:`~astropy.units.core.UnrecognizedUnit`.
         Values are the ones allowed by the ``parse_strict`` argument of
-        :class:`~astropy.units.core.Unit`.
+        :class:`~astropy.units.core.Unit`: ``raise``, ``warn`` and ``silent``.
+
     """
 
     if isinstance(input, HDUList):

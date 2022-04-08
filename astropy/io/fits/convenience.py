@@ -19,23 +19,23 @@ one must open and re-parse the file.  In such cases it is better to use
 :class:`astropy.io.fits.HDUList` object and underlying HDU objects.
 
 Several of the convenience functions, such as `getheader` and `getdata` support
-special arguments for selecting which extension HDU to use when working with a
+special arguments for selecting which HDU to use when working with a
 multi-extension FITS file.  There are a few supported argument formats for
-selecting the extension.  See the documentation for `getdata` for an
+selecting the HDU.  See the documentation for `getdata` for an
 explanation of all the different formats.
 
 .. warning::
     All arguments to convenience functions other than the filename that are
-    *not* for selecting the extension HDU should be passed in as keyword
+    *not* for selecting the HDU should be passed in as keyword
     arguments.  This is to avoid ambiguity and conflicts with the
-    extension arguments.  For example, to set NAXIS=1 on the Primary HDU:
+    HDU arguments.  For example, to set NAXIS=1 on the Primary HDU:
 
     Wrong::
 
         astropy.io.fits.setval('myimage.fits', 'NAXIS', 1)
 
     The above example will try to set the NAXIS value on the first extension
-    HDU to blank.  That is, the argument '1' is assumed to specify an extension
+    HDU to blank.  That is, the argument '1' is assumed to specify an
     HDU.
 
     Right::
@@ -67,14 +67,10 @@ from .hdu.hdulist import fitsopen, HDUList
 from .hdu.image import PrimaryHDU, ImageHDU
 from .hdu.table import BinTableHDU
 from .header import Header
-from .util import fileobj_closed, fileobj_name, fileobj_mode, _is_int
+from .util import (fileobj_closed, fileobj_name, fileobj_mode, _is_int,
+                   _is_dask_array)
 from astropy.utils.exceptions import AstropyUserWarning
 
-try:
-    from dask.array import Array as DaskArray
-except ImportError:
-    class DaskArray:
-        pass
 
 __all__ = ['getheader', 'getdata', 'getval', 'setval', 'delval', 'writeto',
            'append', 'update', 'info', 'tabledump', 'tableload',
@@ -83,7 +79,7 @@ __all__ = ['getheader', 'getdata', 'getval', 'setval', 'delval', 'writeto',
 
 def getheader(filename, *args, **kwargs):
     """
-    Get the header from an extension of a FITS file.
+    Get the header from an HDU of a FITS file.
 
     Parameters
     ----------
@@ -92,10 +88,9 @@ def getheader(filename, *args, **kwargs):
         must be one of the following rb, rb+, or ab+).
 
     ext, extname, extver
-        The rest of the arguments are for extension specification.  See the
+        The rest of the arguments are for HDU specification.  See the
         `getdata` documentation for explanations/examples.
-
-    kwargs
+    **kwargs
         Any additional keyword arguments to be passed to
         `astropy.io.fits.open`.
 
@@ -118,7 +113,7 @@ def getheader(filename, *args, **kwargs):
 def getdata(filename, *args, header=None, lower=None, upper=None, view=None,
             **kwargs):
     """
-    Get the data from an extension of a FITS file (and optionally the
+    Get the data from an HDU of a FITS file (and optionally the
     header).
 
     Parameters
@@ -128,23 +123,23 @@ def getdata(filename, *args, header=None, lower=None, upper=None, view=None,
         following rb, rb+, or ab+.
 
     ext
-        The rest of the arguments are for extension specification.
+        The rest of the arguments are for HDU specification.
         They are flexible and are best illustrated by examples.
 
-        No extra arguments implies the primary header::
+        No extra arguments implies the primary HDU::
 
             getdata('in.fits')
 
         .. note::
-            Exclusive to ``getdata``: if extension is not specified
+            Exclusive to ``getdata``: if ``ext`` is not specified
             and primary header contains no data, ``getdata`` attempts
-            to retrieve data from first extension.
+            to retrieve data from first extension HDU.
 
-        By extension number::
+        By HDU number::
 
-            getdata('in.fits', 0)      # the primary header
-            getdata('in.fits', 2)      # the second extension
-            getdata('in.fits', ext=2)  # the second extension
+            getdata('in.fits', 0)      # the primary HDU
+            getdata('in.fits', 2)      # the second extension HDU
+            getdata('in.fits', ext=2)  # the second extension HDU
 
         By name, i.e., ``EXTNAME`` value (if unique)::
 
@@ -179,7 +174,7 @@ def getdata(filename, *args, header=None, lower=None, upper=None, view=None,
 
            data.view(view)
 
-    kwargs
+    **kwargs
         Any additional keyword arguments to be passed to
         `astropy.io.fits.open`.
 
@@ -194,7 +189,7 @@ def getdata(filename, *args, header=None, lower=None, upper=None, view=None,
     Raises
     ------
     IndexError
-        If no data is found in searched extensions.
+        If no data is found in searched HDUs.
     """
 
     mode, closed = _get_file_mode(filename)
@@ -213,7 +208,7 @@ def getdata(filename, *args, header=None, lower=None, upper=None, view=None,
             if ext_given:
                 raise IndexError(f"No data in HDU #{extidx}.")
 
-            # fallback to the first non-primary extension
+            # fallback to the first extension HDU
             if len(hdulist) == 1:
                 raise IndexError(
                     "No data in Primary HDU and no extension HDU found."
@@ -270,10 +265,9 @@ def getval(filename, keyword, *args, **kwargs):
         Keyword name
 
     ext, extname, extver
-        The rest of the arguments are for extension specification.
+        The rest of the arguments are for HDU specification.
         See `getdata` for explanations/examples.
-
-    kwargs
+    **kwargs
         Any additional keyword arguments to be passed to
         `astropy.io.fits.open`.
         *Note:* This function automatically specifies ``do_not_scale_image_data
@@ -338,10 +332,9 @@ def setval(filename, keyword, *args, value=None, comment=None, before=None,
         will automatically be preserved  (default: `False`).
 
     ext, extname, extver
-        The rest of the arguments are for extension specification.
+        The rest of the arguments are for HDU specification.
         See `getdata` for explanations/examples.
-
-    kwargs
+    **kwargs
         Any additional keyword arguments to be passed to
         `astropy.io.fits.open`.
         *Note:* This function automatically specifies ``do_not_scale_image_data
@@ -378,10 +371,9 @@ def delval(filename, keyword, *args, **kwargs):
         Keyword name or index
 
     ext, extname, extver
-        The rest of the arguments are for extension specification.
+        The rest of the arguments are for HDU specification.
         See `getdata` for explanations/examples.
-
-    kwargs
+    **kwargs
         Any additional keyword arguments to be passed to
         `astropy.io.fits.open`.
         *Note:* This function automatically specifies ``do_not_scale_image_data
@@ -655,7 +647,7 @@ def append(filename, data, header=None, checksum=False, verify=True, **kwargs):
         to the end of the file.  Setting ``verify`` to `False` can be much
         faster.
 
-    kwargs
+    **kwargs
         Additional arguments are passed to:
 
         - `~astropy.io.fits.writeto` if the file does not exist or is empty.
@@ -701,7 +693,7 @@ def append(filename, data, header=None, checksum=False, verify=True, **kwargs):
 
 def update(filename, data, *args, **kwargs):
     """
-    Update the specified extension with the input data/header.
+    Update the specified HDU with the input data/header.
 
     Parameters
     ----------
@@ -720,15 +712,15 @@ def update(filename, data, *args, **kwargs):
         The rest of the arguments are flexible: the 3rd argument can be the
         header associated with the data.  If the 3rd argument is not a
         `Header`, it (and other positional arguments) are assumed to be the
-        extension specification(s).  Header and extension specs can also be
+        HDU specification(s).  Header and HDU specs can also be
         keyword arguments.  For example::
 
             update(file, dat, hdr, 'sci')  # update the 'sci' extension
-            update(file, dat, 3)  # update the 3rd extension
-            update(file, dat, hdr, 3)  # update the 3rd extension
-            update(file, dat, 'sci', 2)  # update the 2nd SCI extension
-            update(file, dat, 3, header=hdr)  # update the 3rd extension
-            update(file, dat, header=hdr, ext=5)  # update the 5th extension
+            update(file, dat, 3)  # update the 3rd extension HDU
+            update(file, dat, hdr, 3)  # update the 3rd extension HDU
+            update(file, dat, 'sci', 2)  # update the 2nd extension HDU named 'sci'
+            update(file, dat, 3, header=hdr)  # update the 3rd extension HDU
+            update(file, dat, header=hdr, ext=5)  # update the 5th extension HDU
 
     **kwargs
         Any additional keyword arguments to be passed to
@@ -763,7 +755,7 @@ def info(filename, output=None, **kwargs):
     Print the summary information on a FITS file.
 
     This includes the name, type, length of header, data shape and type
-    for each extension.
+    for each HDU.
 
     Parameters
     ----------
@@ -775,8 +767,7 @@ def info(filename, output=None, **kwargs):
         A file-like object to write the output to.  If ``False``, does not
         output to a file and instead returns a list of tuples representing the
         HDU info.  Writes to ``sys.stdout`` by default.
-
-    kwargs
+    **kwargs
         Any additional keyword arguments to be passed to
         `astropy.io.fits.open`.
         *Note:* This function sets ``ignore_missing_end=True`` by default.
@@ -813,18 +804,18 @@ def printdiff(inputa, inputb, *args, **kwargs):
         object to compare to ``inputa``.
 
     ext, extname, extver
-        Additional positional arguments are for extension specification if your
+        Additional positional arguments are for HDU specification if your
         inputs are string filenames (will not work if
         ``inputa`` and ``inputb`` are ``HDU`` objects or `HDUList` objects).
         They are flexible and are best illustrated by examples.  In addition
         to using these arguments positionally you can directly call the
         keyword parameters ``ext``, ``extname``.
 
-        By extension number::
+        By HDU number::
 
             printdiff('inA.fits', 'inB.fits', 0)      # the primary HDU
-            printdiff('inA.fits', 'inB.fits', 2)      # the second extension
-            printdiff('inA.fits', 'inB.fits', ext=2)  # the second extension
+            printdiff('inA.fits', 'inB.fits', 2)      # the second extension HDU
+            printdiff('inA.fits', 'inB.fits', ext=2)  # the second extension HDU
 
         By name, i.e., ``EXTNAME`` value (if unique). ``EXTNAME`` values are
         not case sensitive:
@@ -846,7 +837,7 @@ def printdiff(inputa, inputb, *args, **kwargs):
             printdiff('inA.fits', 'inB.fits',
                       ext=('sci', 1), extname='err', extver=2)
 
-    kwargs
+    **kwargs
         Any additional keyword arguments to be passed to
         `~astropy.io.fits.FITSDiff`.
 
@@ -1092,7 +1083,7 @@ def _makehdu(data, header):
         if ((isinstance(data, np.ndarray) and data.dtype.fields is not None) or
                 isinstance(data, np.recarray)):
             hdu = BinTableHDU(data, header=header)
-        elif isinstance(data, (np.ndarray, DaskArray)):
+        elif isinstance(data, np.ndarray) or _is_dask_array(data):
             hdu = ImageHDU(data, header=header)
         else:
             raise KeyError('Data must be a numpy array.')

@@ -1,19 +1,82 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 
+"""Stand-alone overall systems tests for :mod:`astropy.cosmology`."""
+
 from io import StringIO
 
-import pytest
-
 import numpy as np
+import pytest
 
 import astropy.constants as const
 import astropy.units as u
-from astropy.cosmology import Cosmology, flrw, funcs
-from astropy.cosmology.realizations import Planck13, Planck18, default_cosmology
+from astropy.cosmology import flrw
+from astropy.cosmology.realizations import Planck18
 from astropy.units import allclose
 from astropy.utils.compat.optional_deps import HAS_SCIPY
-from astropy.utils.exceptions import AstropyDeprecationWarning, AstropyUserWarning
+from astropy.utils.exceptions import AstropyUserWarning
 
+
+@pytest.mark.skipif(not HAS_SCIPY, reason="requires scipy.")
+def test_flat_z1():
+    """Test a flat cosmology at z=1 against several other on-line calculators.
+
+    Test values were taken from the following web cosmology calculators on
+    2012-02-11:
+
+    Wright: http://www.astro.ucla.edu/~wright/CosmoCalc.html
+            (https://ui.adsabs.harvard.edu/abs/2006PASP..118.1711W)
+    Kempner: http://www.kempner.net/cosmic.php
+    iCosmos: http://www.icosmos.co.uk/index.html
+    """
+    cosmo = flrw.FlatLambdaCDM(H0=70, Om0=0.27, Tcmb0=0.0)
+
+    # The order of values below is Wright, Kempner, iCosmos'
+    assert allclose(cosmo.comoving_distance(1),
+                    [3364.5, 3364.8, 3364.7988] * u.Mpc, rtol=1e-4)
+    assert allclose(cosmo.angular_diameter_distance(1),
+                    [1682.3, 1682.4, 1682.3994] * u.Mpc, rtol=1e-4)
+    assert allclose(cosmo.luminosity_distance(1),
+                    [6729.2, 6729.6, 6729.5976] * u.Mpc, rtol=1e-4)
+    assert allclose(cosmo.lookback_time(1),
+                    [7.841, 7.84178, 7.843] * u.Gyr, rtol=1e-3)
+    assert allclose(cosmo.lookback_distance(1),
+                    [2404.0, 2404.24, 2404.4] * u.Mpc, rtol=1e-3)
+
+
+@pytest.mark.skipif(not HAS_SCIPY, reason="requires scipy.")
+def test_varyde_lumdist_mathematica():
+    """Tests a few varying dark energy EOS models against a Mathematica computation."""
+    z = np.array([0.2, 0.4, 0.9, 1.2])
+
+    # w0wa models
+    cosmo = flrw.w0waCDM(H0=70, Om0=0.2, Ode0=0.8, w0=-1.1, wa=0.2, Tcmb0=0.0)
+    assert allclose(cosmo.luminosity_distance(z),
+                    [1004.0, 2268.62, 6265.76, 9061.84] * u.Mpc, rtol=1e-4)
+    assert allclose(cosmo.de_density_scale(0.0), 1.0, rtol=1e-5)
+    assert allclose(cosmo.de_density_scale([0.0, 0.5, 1.5]),
+                    [1.0, 0.9246310669529021, 0.9184087000251957])
+
+    cosmo = flrw.w0waCDM(H0=70, Om0=0.3, Ode0=0.7, w0=-0.9, wa=0.0, Tcmb0=0.0)
+    assert allclose(cosmo.luminosity_distance(z),
+                    [971.667, 2141.67, 5685.96, 8107.41] * u.Mpc, rtol=1e-4)
+
+    cosmo = flrw.w0waCDM(H0=70, Om0=0.3, Ode0=0.7, w0=-0.9, wa=-0.5, Tcmb0=0.0)
+    assert allclose(cosmo.luminosity_distance(z),
+                    [974.087, 2157.08, 5783.92, 8274.08] * u.Mpc, rtol=1e-4)
+
+    # wpwa models
+    cosmo = flrw.wpwaCDM(H0=70, Om0=0.2, Ode0=0.8, wp=-1.1, wa=0.2, zp=0.5, Tcmb0=0.0)
+    assert allclose(cosmo.luminosity_distance(z),
+                    [1010.81, 2294.45, 6369.45, 9218.95] * u.Mpc, rtol=1e-4)
+
+    cosmo = flrw.wpwaCDM(H0=70, Om0=0.2, Ode0=0.8, wp=-1.1, wa=0.2, zp=0.9, Tcmb0=0.0)
+    assert allclose(cosmo.luminosity_distance(z),
+                    [1013.68, 2305.3, 6412.37, 9283.33] * u.Mpc, rtol=1e-4)
+
+
+###############################################################################
+# TODO! sort and refactor following tests.
+# overall systems tests stay here, specific tests go to new test suite.
 
 @pytest.mark.skipif('not HAS_SCIPY')
 def test_units():
@@ -129,52 +192,6 @@ def test_xtfuncs():
                     [2.7899584, 3.44104758], rtol=1e-4)
 
 
-@pytest.mark.skipif('not HAS_SCIPY')
-def test_flat_z1():
-    """ Test a flat cosmology at z=1 against several other on-line
-    calculators.
-    """
-    cosmo = flrw.FlatLambdaCDM(H0=70, Om0=0.27, Tcmb0=0.0)
-    z = 1
-
-    # Test values were taken from the following web cosmology
-    # calculators on 27th Feb 2012:
-
-    # Wright: http://www.astro.ucla.edu/~wright/CosmoCalc.html
-    #         (https://ui.adsabs.harvard.edu/abs/2006PASP..118.1711W)
-    # Kempner: http://www.kempner.net/cosmic.php
-    # iCosmos: http://www.icosmos.co.uk/index.html
-
-    # The order of values below is Wright, Kempner, iCosmos'
-    assert allclose(cosmo.comoving_distance(z),
-                    [3364.5, 3364.8, 3364.7988] * u.Mpc, rtol=1e-4)
-    assert allclose(cosmo.angular_diameter_distance(z),
-                    [1682.3, 1682.4, 1682.3994] * u.Mpc, rtol=1e-4)
-    assert allclose(cosmo.luminosity_distance(z),
-                    [6729.2, 6729.6, 6729.5976] * u.Mpc, rtol=1e-4)
-    assert allclose(cosmo.lookback_time(z),
-                    [7.841, 7.84178, 7.843] * u.Gyr, rtol=1e-3)
-    assert allclose(cosmo.lookback_distance(z),
-                    [2404.0, 2404.24, 2404.4] * u.Mpc, rtol=1e-3)
-
-
-def test_zeroing():
-    """ Tests if setting params to 0s always respects that"""
-    # Make sure Ode = 0 behaves that way
-    cosmo = flrw.LambdaCDM(H0=70, Om0=0.27, Ode0=0.0)
-    assert allclose(cosmo.Ode([0, 1, 2, 3]), [0, 0, 0, 0])
-    assert allclose(cosmo.Ode(1), 0)
-    # Ogamma0 and Onu
-    cosmo = flrw.FlatLambdaCDM(H0=70, Om0=0.27, Tcmb0=0.0)
-    assert allclose(cosmo.Ogamma(1.5), [0, 0, 0, 0])
-    assert allclose(cosmo.Ogamma([0, 1, 2, 3]), [0, 0, 0, 0])
-    assert allclose(cosmo.Onu(1.5), [0, 0, 0, 0])
-    assert allclose(cosmo.Onu([0, 1, 2, 3]), [0, 0, 0, 0])
-    # Obaryon
-    cosmo = flrw.LambdaCDM(H0=70, Om0=0.27, Ode0=0.73, Ob0=0.0)
-    assert allclose(cosmo.Ob([0, 1, 2, 3]), [0, 0, 0, 0])
-
-
 # This class is to test whether the routines work correctly
 # if one only overloads w(z)
 class test_cos_sub(flrw.FLRW):
@@ -220,49 +237,6 @@ def test_de_subclass():
                     [1.12934694, 1.23114444], rtol=1e-4)
 
     # Add neutrinos for efunc, inv_efunc
-
-
-@pytest.mark.skipif('not HAS_SCIPY')
-def test_varyde_lumdist_mathematica():
-    """Tests a few varying dark energy EOS models against a mathematica
-    computation"""
-
-    # w0wa models
-    z = np.array([0.2, 0.4, 0.9, 1.2])
-    cosmo = flrw.w0waCDM(H0=70, Om0=0.2, Ode0=0.8, w0=-1.1, wa=0.2, Tcmb0=0.0)
-    assert allclose(cosmo.w0, -1.1)
-    assert allclose(cosmo.wa, 0.2)
-
-    assert allclose(cosmo.luminosity_distance(z),
-                    [1004.0, 2268.62, 6265.76, 9061.84] * u.Mpc, rtol=1e-4)
-    assert allclose(cosmo.de_density_scale(0.0), 1.0, rtol=1e-5)
-    assert allclose(cosmo.de_density_scale([0.0, 0.5, 1.5]),
-                    [1.0, 0.9246310669529021, 0.9184087000251957])
-
-    cosmo = flrw.w0waCDM(H0=70, Om0=0.3, Ode0=0.7, w0=-0.9, wa=0.0, Tcmb0=0.0)
-    assert allclose(cosmo.luminosity_distance(z),
-                    [971.667, 2141.67, 5685.96, 8107.41] * u.Mpc, rtol=1e-4)
-    cosmo = flrw.w0waCDM(H0=70, Om0=0.3, Ode0=0.7, w0=-0.9, wa=-0.5,
-                         Tcmb0=0.0)
-    assert allclose(cosmo.luminosity_distance(z),
-                    [974.087, 2157.08, 5783.92, 8274.08] * u.Mpc, rtol=1e-4)
-
-    # wpwa models
-    cosmo = flrw.wpwaCDM(H0=70, Om0=0.2, Ode0=0.8, wp=-1.1, wa=0.2, zp=0.5,
-                         Tcmb0=0.0)
-    assert allclose(cosmo.wp, -1.1)
-    assert allclose(cosmo.wa, 0.2)
-    assert allclose(cosmo.zp, 0.5)
-    assert allclose(cosmo.luminosity_distance(z),
-                    [1010.81, 2294.45, 6369.45, 9218.95] * u.Mpc, rtol=1e-4)
-
-    cosmo = flrw.wpwaCDM(H0=70, Om0=0.2, Ode0=0.8, wp=-1.1, wa=0.2, zp=0.9,
-                         Tcmb0=0.0)
-    assert allclose(cosmo.wp, -1.1)
-    assert allclose(cosmo.wa, 0.2)
-    assert allclose(cosmo.zp, 0.9)
-    assert allclose(cosmo.luminosity_distance(z),
-                    [1013.68, 2305.3, 6412.37, 9283.33] * u.Mpc, rtol=1e-4)
 
 
 @pytest.mark.skipif('not HAS_SCIPY')
@@ -659,43 +633,6 @@ def test_integral():
                     cosmo.inv_efunc([1.0, 2.0, 6.0]), rtol=1e-7)
 
 
-def test_wz():
-    cosmo = flrw.LambdaCDM(H0=70, Om0=0.3, Ode0=0.70)
-    assert allclose(cosmo.w(1.0), -1.)
-    assert allclose(cosmo.w([0.1, 0.2, 0.5, 1.5, 2.5, 11.5]),
-                    [-1., -1, -1, -1, -1, -1])
-
-    cosmo = flrw.wCDM(H0=70, Om0=0.3, Ode0=0.70, w0=-0.5)
-    assert allclose(cosmo.w(1.0), -0.5)
-    assert allclose(cosmo.w([0.1, 0.2, 0.5, 1.5, 2.5, 11.5]),
-                    [-0.5, -0.5, -0.5, -0.5, -0.5, -0.5])
-    assert allclose(cosmo.w0, -0.5)
-
-    cosmo = flrw.w0wzCDM(H0=70, Om0=0.3, Ode0=0.70, w0=-1, wz=0.5)
-    assert allclose(cosmo.w(1.0), -0.5)
-    assert allclose(cosmo.w([0.0, 0.5, 1.0, 1.5, 2.3]),
-                    [-1.0, -0.75, -0.5, -0.25, 0.15])
-    assert allclose(cosmo.w0, -1.0)
-    assert allclose(cosmo.wz, 0.5)
-
-    cosmo = flrw.w0waCDM(H0=70, Om0=0.3, Ode0=0.70, w0=-1, wa=-0.5)
-    assert allclose(cosmo.w0, -1.0)
-    assert allclose(cosmo.wa, -0.5)
-    assert allclose(cosmo.w(1.0), -1.25)
-    assert allclose(cosmo.w([0.0, 0.5, 1.0, 1.5, 2.3]),
-                    [-1, -1.16666667, -1.25, -1.3, -1.34848485])
-
-    cosmo = flrw.wpwaCDM(H0=70, Om0=0.3, Ode0=0.70, wp=-0.9,
-                         wa=0.2, zp=0.5)
-    assert allclose(cosmo.wp, -0.9)
-    assert allclose(cosmo.wa, 0.2)
-    assert allclose(cosmo.zp, 0.5)
-    assert allclose(cosmo.w(0.5), -0.9)
-    assert allclose(cosmo.w([0.1, 0.2, 0.5, 1.5, 2.5, 11.5]),
-                    [-0.94848485, -0.93333333, -0.9, -0.84666667,
-                     -0.82380952, -0.78266667])
-
-
 @pytest.mark.skipif('not HAS_SCIPY')
 def test_de_densityscale():
     cosmo = flrw.LambdaCDM(H0=70, Om0=0.3, Ode0=0.70)
@@ -993,48 +930,6 @@ def test_absorption_distance():
                     [1.72576635, 7.98685853])
     assert allclose(tcos.absorption_distance(3), 7.98685853)
     assert allclose(tcos.absorption_distance(3.), 7.98685853)
-
-
-@pytest.mark.skipif('not HAS_SCIPY')
-def test_massivenu_basic():
-    # Test no neutrinos case
-    tcos = flrw.FlatLambdaCDM(70.4, 0.272, Neff=4.05,
-                              Tcmb0=2.725 * u.K, m_nu=0)
-    assert allclose(tcos.Neff, 4.05)
-    assert not tcos.has_massive_nu
-    mnu = tcos.m_nu
-    assert len(mnu) == 4
-    assert mnu.unit == u.eV
-    assert allclose(mnu, [0.0, 0.0, 0.0, 0.0] * u.eV)
-    assert allclose(tcos.nu_relative_density(1.), 0.22710731766 * 4.05,
-                    rtol=1e-6)
-    assert allclose(tcos.nu_relative_density(1), 0.22710731766 * 4.05,
-                    rtol=1e-6)
-
-    # Alternative no neutrinos case
-    tcos = flrw.FlatLambdaCDM(70.4, 0.272, Tcmb0=0 * u.K,
-                              m_nu=str((0.4 * u.eV).to(u.g, u.mass_energy())))
-    assert not tcos.has_massive_nu
-    assert tcos.m_nu is None
-
-    # Test basic setting, retrieval of values
-    tcos = flrw.FlatLambdaCDM(70.4, 0.272, Tcmb0=2.725 * u.K,
-                              m_nu=u.Quantity([0.0, 0.01, 0.02], u.eV))
-    assert tcos.has_massive_nu
-    mnu = tcos.m_nu
-    assert len(mnu) == 3
-    assert mnu.unit == u.eV
-    assert allclose(mnu, [0.0, 0.01, 0.02] * u.eV)
-
-    # All massive neutrinos case
-    tcos = flrw.FlatLambdaCDM(70.4, 0.272, Tcmb0=2.725,
-                              m_nu=u.Quantity(0.1, u.eV), Neff=3.1)
-    assert allclose(tcos.Neff, 3.1)
-    assert tcos.has_massive_nu
-    mnu = tcos.m_nu
-    assert len(mnu) == 3
-    assert mnu.unit == u.eV
-    assert allclose(mnu, [0.1, 0.1, 0.1] * u.eV)
 
 
 @pytest.mark.skipif('not HAS_SCIPY')

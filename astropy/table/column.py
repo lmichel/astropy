@@ -16,7 +16,6 @@ from astropy.utils.data_info import BaseColumnInfo, dtype_info_name
 from astropy.utils.misc import dtype_bytes_or_chars
 from . import groups
 from . import pprint
-from .np_utils import fix_column_name
 
 # These "shims" provide __getitem__ implementations for Column and MaskedColumn
 from ._column_mixins import _ColumnGetitemShim, _MaskedColumnGetitemShim
@@ -435,7 +434,7 @@ class BaseColumn(_ColumnGetitemShim, np.ndarray):
             self_data = np.array(data, dtype=dtype, copy=copy)
 
         self = self_data.view(cls)
-        self._name = fix_column_name(name)
+        self._name = None if name is None else str(name)
         self._parent_table = None
         self.unit = unit
         self._format = format
@@ -623,7 +622,8 @@ class BaseColumn(_ColumnGetitemShim, np.ndarray):
 
     @name.setter
     def name(self, val):
-        val = fix_column_name(val)
+        if val is not None:
+            val = str(val)
 
         if self.parent_table is not None:
             table = self.parent_table
@@ -839,6 +839,18 @@ class BaseColumn(_ColumnGetitemShim, np.ndarray):
     @unit.deleter
     def unit(self):
         self._unit = None
+
+    def searchsorted(self, v, side='left', sorter=None):
+        # For bytes type data, encode the `v` value as UTF-8 (if necessary) before
+        # calling searchsorted. This prevents a factor of 1000 slowdown in
+        # searchsorted in this case.
+        a = self.data
+        if a.dtype.kind == 'S' and not isinstance(v, bytes):
+            v = np.asarray(v)
+            if v.dtype.kind == 'U':
+                v = np.char.encode(v, 'utf-8')
+        return np.searchsorted(a, v, side=side, sorter=sorter)
+    searchsorted.__doc__ = np.ndarray.searchsorted.__doc__
 
     def convert_unit_to(self, new_unit, equivalencies=[]):
         """

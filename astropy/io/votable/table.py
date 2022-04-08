@@ -108,7 +108,7 @@ def parse(source, columns=None, invalid='exception', verify=None,
     -------
     votable : `~astropy.io.votable.tree.VOTableFile` object
 
-    See also
+    See Also
     --------
     astropy.io.votable.exceptions : The exceptions this function may raise.
     """
@@ -209,7 +209,7 @@ def writeto(table, file, tabledata_format=None):
                  _debug_python_based_parser=True)
 
 
-def validate(source, output=None, xmllint=False, filename=None):
+def validate(source, output=sys.stdout, xmllint=False, filename=None):
     """
     Prints a validation report for the given file.
 
@@ -244,12 +244,10 @@ def validate(source, output=None, xmllint=False, filename=None):
 
     from astropy.utils.console import print_code_line, color_print
 
-    if output is None:
-        output = sys.stdout
-
     return_as_str = False
     if output is None:
         output = io.StringIO()
+        return_as_str = True
 
     lines = []
     votable = None

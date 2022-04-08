@@ -1,12 +1,8 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 
-import copy
-import warnings
-
 from astropy.cosmology import units as cu
 from astropy.io import registry as io_registry
 from astropy.units import add_enabled_units
-from astropy.utils.exceptions import AstropyUserWarning
 
 __all__ = ["CosmologyRead", "CosmologyWrite",
            "CosmologyFromFormat", "CosmologyToFormat"]
@@ -42,14 +38,6 @@ class CosmologyRead(io_registry.UnifiedReadWrite):
       >>> Cosmology.read.list_formats()  # Print list of available formats
 
     See also: https://docs.astropy.org/en/stable/io/unified.html
-
-    .. note::
-
-        :meth:`~astropy.cosmology.Cosmology.read` and
-        :meth:`~astropy.cosmology.Cosmology.from_format` currently access the
-        same registry. This will be deprecated and formats intended for
-        ``from_format`` should not be used here. Use ``Cosmology.read.help()``
-        to confirm that the format may be used to read a file.
 
     Parameters
     ----------
@@ -112,14 +100,6 @@ class CosmologyWrite(io_registry.UnifiedReadWrite):
       >>> Cosmology.write.help(format='<format>')  # Get detailed help on format
       >>> Cosmology.write.list_formats()  # Print list of available formats
 
-    .. note::
-
-        :meth:`~astropy.cosmology.Cosmology.write` and
-        :meth:`~astropy.cosmology.Cosmology.to_format` currently access the
-        same registry. This will be deprecated and formats intended for
-        ``to_format`` should not be used here. Use ``Cosmology.write.help()``
-        to confirm that the format may be used to write to a file.
-
     Parameters
     ----------
     *args
@@ -171,24 +151,21 @@ class CosmologyFromFormat(io_registry.UnifiedReadWrite):
 
     See also: https://docs.astropy.org/en/stable/io/unified.html
 
-    .. note::
-
-        :meth:`~astropy.cosmology.Cosmology.from_format` and
-        :meth:`~astropy.cosmology.Cosmology.read` currently access the
-        same registry. This will be deprecated and formats intended for
-        ``read`` should not be used here. Use ``Cosmology.to_format.help()``
-        to confirm that the format may be used to convert to a Cosmology.
-
     Parameters
     ----------
     obj : object
         The object to parse according to 'format'
     *args
         Positional arguments passed through to data parser.
-    format : str (optional, keyword-only)
-        Object format specifier.
+    format : str or None, optional keyword-only
+        Object format specifier. For `None` (default) CosmologyFromFormat tries
+        to identify the correct format.
     **kwargs
         Keyword arguments passed through to data parser.
+        Parsers should accept the following keyword arguments:
+
+        - cosmology : the class (or string name thereof) to use / check when
+                      constructing the cosmology instance.
 
     Returns
     -------
@@ -200,7 +177,7 @@ class CosmologyFromFormat(io_registry.UnifiedReadWrite):
     def __init__(self, instance, cosmo_cls):
         super().__init__(instance, cosmo_cls, "read", registry=convert_registry)
 
-    def __call__(self, obj, *args, **kwargs):
+    def __call__(self, obj, *args, format=None, **kwargs):
         from astropy.cosmology.core import Cosmology
 
         # so subclasses can override, also pass the class as a kwarg.
@@ -217,7 +194,7 @@ class CosmologyFromFormat(io_registry.UnifiedReadWrite):
                     f"{valid[0]} or its qualified name '{valid[1]}'")
 
         with add_enabled_units(cu):
-            cosmo = self.registry.read(self._cls, obj, *args, **kwargs)
+            cosmo = self.registry.read(self._cls, obj, *args, format=format, **kwargs)
 
         return cosmo
 
@@ -243,14 +220,6 @@ class CosmologyToFormat(io_registry.UnifiedReadWrite):
       >>> Cosmology.to_format.help()  # Get help and list supported formats
       >>> Cosmology.to_format.help('<format>')  # Get detailed help on format
       >>> Cosmology.to_format.list_formats()  # Print list of available formats
-
-    .. note::
-
-        :meth:`~astropy.cosmology.Cosmology.to_format` and
-        :meth:`~astropy.cosmology.Cosmology.write` currently access the
-        same registry. This will be deprecated and formats intended for
-        ``write`` should not be used here. Use ``Cosmology.to_format.help()``
-        to confirm that the format may be used to convert a Cosmology.
 
     Parameters
     ----------

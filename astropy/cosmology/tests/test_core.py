@@ -9,20 +9,18 @@
 import abc
 import inspect
 import pickle
-from types import MappingProxyType
 
 # THIRD PARTY
-import pytest
-
 import numpy as np
+import pytest
 
 # LOCAL
 import astropy.cosmology.units as cu
 import astropy.units as u
-from astropy.cosmology import Cosmology, core
+from astropy.cosmology import Cosmology
 from astropy.cosmology.core import _COSMOLOGY_CLASSES
 from astropy.cosmology.parameter import Parameter
-from astropy.table import QTable, Table
+from astropy.table import Column, QTable, Table
 from astropy.utils.exceptions import AstropyDeprecationWarning
 from astropy.utils.metadata import MetaData
 
@@ -31,6 +29,29 @@ from .test_parameter import ParameterTestMixin
 
 ##############################################################################
 # SETUP / TEARDOWN
+
+
+scalar_zs = [
+    0, 1, 1100,  # interesting times
+    # FIXME! np.inf breaks some funcs. 0 * inf is an error
+    np.float64(3300),  # different type
+    2 * cu.redshift, 3 * u.one  # compatible units
+]
+_zarr = np.linspace(0, 1e5, num=20)
+array_zs = [
+    _zarr,  # numpy
+    _zarr.tolist(),  # pure python
+    Column(_zarr),  # table-like
+    _zarr * cu.redshift  # Quantity
+]
+valid_zs = scalar_zs + array_zs
+
+invalid_zs = [
+    (None, TypeError),  # wrong type
+    # Wrong units (the TypeError is for the cython, which can differ)
+    (4 * u.MeV, (u.UnitConversionError, TypeError)),  # scalar
+    ([0, 1] * u.m, (u.UnitConversionError, TypeError)),  # array
+]
 
 
 class SubCosmology(Cosmology):
@@ -96,21 +117,31 @@ class TestCosmology(ParameterTestMixin, MetaTestMixin,
         self._cls_args = dict(H0=70 * (u.km / u.s / u.Mpc), Tcmb0=2.7 * u.K, m_nu=0.6 * u.eV)
         self.cls_kwargs = dict(name=self.__class__.__name__, meta={"a": "b"})
 
+    def teardown_class(self):
+        _COSMOLOGY_CLASSES.pop("SubCosmology", None)
+
     @property
     def cls_args(self):
         return tuple(self._cls_args.values())
 
-    def teardown_class(self):
-        _COSMOLOGY_CLASSES.pop("SubCosmology", None)
-
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def cosmo_cls(self):
+        """The Cosmology class as a :func:`pytest.fixture`."""
         return self.cls
 
-    @pytest.fixture
-    def cosmo(self):
+    @pytest.fixture(scope="function")  # ensure not cached.
+    def ba(self):
+        """Return filled `inspect.BoundArguments` for cosmology."""
+        ba = self.cls._init_signature.bind(*self.cls_args, **self.cls_kwargs)
+        ba.apply_defaults()
+        return ba
+
+    @pytest.fixture(scope="class")
+    def cosmo(self, cosmo_cls):
         """The cosmology instance with which to test."""
-        return self.cls(*self.cls_args, **self.cls_kwargs)
+        ba = self.cls._init_signature.bind(*self.cls_args, **self.cls_kwargs)
+        ba.apply_defaults()
+        return cosmo_cls(*ba.args, **ba.kwargs)
 
     # ===============================================================
     # Method & Attribute Tests
@@ -212,7 +243,6 @@ class TestCosmology(ParameterTestMixin, MetaTestMixin,
         Test method ``.clone()`` changing a(many) Parameter(s).
         Nothing here b/c no Parameters.
         """
-        pass
 
     def test_clone_fail_unexpected_arg(self, cosmo):
         """Test when ``.clone()`` gets an unexpected argument."""
@@ -236,7 +266,7 @@ class TestCosmology(ParameterTestMixin, MetaTestMixin,
         assert cosmo.is_equivalent(newclone)
         assert newclone.is_equivalent(cosmo)
 
-        # different class
+        # different class and not convertible to Cosmology.
         assert not cosmo.is_equivalent(2)
 
     def test_equality(self, cosmo):
@@ -346,7 +376,6 @@ class CosmologySubclassTest(TestCosmology):
     @abc.abstractmethod
     def setup_class(self):
         """Setup for testing."""
-        pass
 
     # ===============================================================
     # Method & Attribute Tests

@@ -460,9 +460,6 @@ class BaseRepresentationOrDifferential(ShapedLikeNDArray):
     def __truediv__(self, other):
         return self._scale_operation(operator.truediv, other)
 
-    def __div__(self, other):  # pragma: py2
-        return self._scale_operation(operator.truediv, other)
-
     def __neg__(self):
         return self._scale_operation(operator.neg)
 
@@ -1377,7 +1374,6 @@ class CartesianRepresentation(BaseRepresentation):
 
         Examples
         --------
-
         We can start off by creating a cartesian representation object:
 
             >>> from astropy import units as u

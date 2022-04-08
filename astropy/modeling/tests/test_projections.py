@@ -3,20 +3,27 @@
 """Test sky projections defined in WCS Paper II"""
 # pylint: disable=invalid-name, no-member
 import os
-
-import pytest
-import numpy as np
 import unittest.mock as mk
+
+import numpy as np
+import pytest
 from numpy.testing import assert_allclose, assert_almost_equal
 
+from astropy import units as u
+from astropy import wcs
+from astropy.io import fits
 from astropy.modeling import projections
 from astropy.modeling.parameters import InputParameterError
-
-from astropy import units as u
-from astropy.io import fits
-from astropy import wcs
-from astropy.utils.data import get_pkg_data_filename
 from astropy.tests.helper import assert_quantity_allclose
+from astropy.utils.data import get_pkg_data_filename
+
+
+def test_new_wcslib_projections():
+    # Test that we are aware of all WCSLIB projections.
+    # Dectect if a new WCSLIB release introduced new projections.
+    assert not set(wcs.PRJ_CODES).symmetric_difference(
+        projections.projcodes + projections._NOT_SUPPORTED_PROJ_CODES
+    )
 
 
 def test_Projection_properties():
@@ -60,6 +67,8 @@ def test_Sky2Pix(code):
     x, y = tinv(wcslibout['phi'], wcslibout['theta'])
     assert_almost_equal(np.asarray(x), wcs_pix[:, 0])
     assert_almost_equal(np.asarray(y), wcs_pix[:, 1])
+
+    assert isinstance(tinv.prjprm, wcs.Prjprm)
 
 
 @pytest.mark.parametrize(('code',), pars)
@@ -740,17 +749,17 @@ def test_Sky2Pix_CylindricalPerspective_inverse():
 
 
 def test_Pix2Sky_CylindricalEqualArea_inverse():
-    model = projections.Pix2Sky_CylindricalEqualArea(30)
+    model = projections.Pix2Sky_CylindricalEqualArea(0.567)
     inverse = model.inverse
     assert isinstance(inverse, projections.Sky2Pix_CylindricalEqualArea)
-    assert inverse.lam == model.lam == 30
+    assert inverse.lam == model.lam == 0.567
 
 
 def test_Sky2Pix_CylindricalEqualArea_inverse():
-    model = projections.Sky2Pix_CylindricalEqualArea(30)
+    model = projections.Sky2Pix_CylindricalEqualArea(0.765)
     inverse = model.inverse
     assert isinstance(inverse, projections.Pix2Sky_CylindricalEqualArea)
-    assert inverse.lam == model.lam == 30
+    assert inverse.lam == model.lam == 0.765
 
 
 def test_Pix2Sky_PlateCarree_inverse():

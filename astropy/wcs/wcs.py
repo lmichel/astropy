@@ -57,9 +57,10 @@ from .wcsapi.fitswcs import FITSWCSAPIMixin, SlicedFITSWCS
 
 __all__ = ['FITSFixedWarning', 'WCS', 'find_all_wcs',
            'DistortionLookupTable', 'Sip', 'Tabprm', 'Wcsprm', 'Auxprm',
-           'Wtbarr', 'WCSBase', 'validate', 'WcsError', 'SingularMatrixError',
-           'InconsistentAxisTypesError', 'InvalidTransformError',
-           'InvalidCoordinateError', 'NoSolutionError',
+           'Celprm', 'Prjprm', 'Wtbarr', 'WCSBase', 'validate', 'WcsError',
+           'SingularMatrixError', 'InconsistentAxisTypesError',
+           'InvalidTransformError', 'InvalidCoordinateError',
+           'InvalidPrjParametersError', 'NoSolutionError',
            'InvalidSubimageSpecificationError', 'NoConvergence',
            'NonseparableSubimageCoordinateSystemError',
            'NoWcsKeywordsFoundError', 'InvalidTabularParametersError']
@@ -86,6 +87,8 @@ if _wcs is not None:
     Sip = _wcs.Sip
     Wcsprm = _wcs.Wcsprm
     Auxprm = _wcs.Auxprm
+    Celprm = _wcs.Celprm
+    Prjprm = _wcs.Prjprm
     Tabprm = _wcs.Tabprm
     Wtbarr = _wcs.Wtbarr
     WcsError = _wcs.WcsError
@@ -98,10 +101,11 @@ if _wcs is not None:
     NonseparableSubimageCoordinateSystemError = _wcs.NonseparableSubimageCoordinateSystemError
     NoWcsKeywordsFoundError = _wcs.NoWcsKeywordsFoundError
     InvalidTabularParametersError = _wcs.InvalidTabularParametersError
+    InvalidPrjParametersError = _wcs.InvalidPrjParametersError
 
     # Copy all the constants from the C extension into this module's namespace
     for key, val in _wcs.__dict__.items():
-        if key.startswith(('WCSSUB_', 'WCSHDR_', 'WCSHDO_', 'WCSCOMPARE_')):
+        if key.startswith(('WCSSUB_', 'WCSHDR_', 'WCSHDO_', 'WCSCOMPARE_', 'PRJ_')):
             locals()[key] = val
             __all__.append(key)
 
@@ -377,6 +381,12 @@ class WCS(FITSWCSAPIMixin, WCSBase):
                  relax=True, naxis=None, keysel=None, colsel=None,
                  fix=True, translate_units='', _do_set=True):
         close_fds = []
+
+        # these parameters are stored to be used when unpickling a WCS object:
+        self._init_kwargs = {
+            'keysel': copy.copy(keysel),
+            'colsel': copy.copy(colsel),
+        }
 
         if header is None:
             if naxis is None:
@@ -2990,8 +3000,11 @@ reduce these to 2 dimensions using the naxis kwarg.
         buffer = io.BytesIO()
         hdulist.writeto(buffer)
 
+        dct = self.__dict__.copy()
+        dct['_alt_wcskey'] = self.wcs.alt
+
         return (__WCS_unpickle__,
-                (self.__class__, self.__dict__, buffer.getvalue(),))
+                (self.__class__, dct, buffer.getvalue(),))
 
     def dropaxis(self, dropax):
         """
@@ -3273,12 +3286,23 @@ def __WCS_unpickle__(cls, dct, fits_data):
     """
 
     self = cls.__new__(cls)
-    self.__dict__.update(dct)
 
     buffer = io.BytesIO(fits_data)
     hdulist = fits.open(buffer)
 
-    WCS.__init__(self, hdulist[0].header, hdulist)
+    naxis = dct.pop('naxis', None)
+    if naxis:
+        hdulist[0].header['naxis'] = naxis
+        naxes = dct.pop('_naxis', [])
+        for k, na in enumerate(naxes):
+            hdulist[0].header[f'naxis{k + 1:d}'] = na
+
+    kwargs = dct.pop('_init_kwargs', {})
+    self.__dict__.update(dct)
+
+    wcskey = dct.pop('_alt_wcskey', ' ')
+    WCS.__init__(self, hdulist[0].header, hdulist, key=wcskey, **kwargs)
+    self.pixel_bounds = dct.get('_pixel_bounds', None)
 
     return self
 

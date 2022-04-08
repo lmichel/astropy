@@ -1,29 +1,28 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 # pylint: disable=invalid-name
 import os
-import sys
 import subprocess
-
-import pytest
+import sys
 import unittest.mock as mk
-import numpy as np
 from inspect import signature
+
+import numpy as np
+import pytest
 from numpy.testing import assert_allclose, assert_equal
 
 import astropy
-from astropy.modeling.core import (Model, CompoundModel, custom_model,
-                                   SPECIAL_OPERATORS, _add_special_operator,
-                                   bind_bounding_box, bind_compound_bounding_box,
-                                   fix_inputs)
-from astropy.modeling.bounding_box import ModelBoundingBox, CompoundBoundingBox
-from astropy.modeling.separable import separability_matrix
-from astropy.modeling.parameters import Parameter
-from astropy.modeling import models
-from astropy.convolution import convolve_models
+import astropy.modeling.core as core
 import astropy.units as u
+from astropy.convolution import convolve_models
+from astropy.modeling import models
+from astropy.modeling.bounding_box import CompoundBoundingBox, ModelBoundingBox
+from astropy.modeling.core import (SPECIAL_OPERATORS, CompoundModel, Model, _add_special_operator,
+                                   bind_bounding_box, bind_compound_bounding_box, custom_model,
+                                   fix_inputs)
+from astropy.modeling.parameters import Parameter
+from astropy.modeling.separable import separability_matrix
 from astropy.tests.helper import assert_quantity_allclose
 from astropy.utils.compat.optional_deps import HAS_SCIPY  # noqa
-import astropy.modeling.core as core
 
 
 class NonFittableModel(Model):
@@ -721,7 +720,7 @@ def test_prepare_outputs_single_entry_vector():
 
     output = model(np.array([1]), np.array([2]))
     assert output.shape == (1,)
-    np.testing.assert_array_equal(output, [0.9500411305585278])
+    np.testing.assert_allclose(output, [0.9500411305585278])
 
 
 @pytest.mark.skipif('not HAS_SCIPY')
@@ -838,25 +837,20 @@ def test_print_special_operator_CompoundModel(capsys):
     """
 
     model = convolve_models(models.Sersic2D(), models.Gaussian2D())
-    print(model)
-
-    true_out = "Model: CompoundModel\n" +\
-               "Inputs: ('x', 'y')\n" +\
-               "Outputs: ('z',)\n" +\
-               "Model set size: 1\n" +\
-               "Expression: convolve_fft (([0]), ([1]))\n" +\
-               "Components: \n" +\
-               "    [0]: <Sersic2D(amplitude=1., r_eff=1., n=4., x_0=0., y_0=0., ellip=0., theta=0.)>\n" +\
-               "\n" +\
-               "    [1]: <Gaussian2D(amplitude=1., x_mean=0., y_mean=0., x_stddev=1., y_stddev=1., theta=0.)>\n" +\
-               "Parameters:\n" +\
-               "    amplitude_0 r_eff_0 n_0 x_0_0 y_0_0 ... y_mean_1 x_stddev_1 y_stddev_1 theta_1\n" +\
-               "    ----------- ------- --- ----- ----- ... -------- ---------- ---------- -------\n" +\
-               "            1.0     1.0 4.0   0.0   0.0 ...      0.0        1.0        1.0     0.0\n"
-
-    out, err = capsys.readouterr()
-    assert err == ''
-    assert out == true_out
+    with astropy.conf.set_temp('max_width', 80):
+        assert str(model) == "Model: CompoundModel\n" +\
+                             "Inputs: ('x', 'y')\n" +\
+                             "Outputs: ('z',)\n" +\
+                             "Model set size: 1\n" +\
+                             "Expression: convolve_fft (([0]), ([1]))\n" +\
+                             "Components: \n" +\
+                             "    [0]: <Sersic2D(amplitude=1., r_eff=1., n=4., x_0=0., y_0=0., ellip=0., theta=0.)>\n" +\
+                             "\n" +\
+                             "    [1]: <Gaussian2D(amplitude=1., x_mean=0., y_mean=0., x_stddev=1., y_stddev=1., theta=0.)>\n" +\
+                             "Parameters:\n" +\
+                             "    amplitude_0 r_eff_0 n_0 x_0_0 y_0_0 ... y_mean_1 x_stddev_1 y_stddev_1 theta_1\n" +\
+                             "    ----------- ------- --- ----- ----- ... -------- ---------- ---------- -------\n" +\
+                             "            1.0     1.0 4.0   0.0   0.0 ...      0.0        1.0        1.0     0.0"
 
 
 def test__validate_input_shape():
@@ -1311,3 +1305,59 @@ def test_compound_model_with_bounding_box_true_and_single_output():
     assert_equal(model(x, y), [4, 5])
     # Check with_bounding_box=True should be the same
     assert_equal(model(x, y, with_bounding_box=True), [4, 5])
+
+
+def test_bounding_box_pass_with_ignored():
+    """Test the possiblity of setting ignored variables in bounding box"""
+
+    model = models.Polynomial2D(2)
+    bbox = ModelBoundingBox.validate(model, (-1, 1), ignored=['y'])
+    model.bounding_box = bbox
+    assert model.bounding_box.bounding_box() == (-1, 1)
+    assert model.bounding_box == bbox
+
+    model = models.Polynomial2D(2)
+    bind_bounding_box(model, (-1, 1), ignored=['y'])
+    assert model.bounding_box.bounding_box() == (-1, 1)
+    assert model.bounding_box == bbox
+
+
+def test_compound_bounding_box_pass_with_ignored():
+    model = models.Shift(1) & models.Shift(2) & models.Identity(1)
+    model.inputs = ('x', 'y', 'slit_id')
+    bbox = {(0,): (-0.5, 1047.5),
+            (1,): (-0.5, 2047.5), }
+    cbbox = CompoundBoundingBox.validate(model, bbox, selector_args=[('slit_id', True)],
+                                         ignored=['y'], order='F')
+    model.bounding_box = cbbox
+
+    model = models.Shift(1) & models.Shift(2) & models.Identity(1)
+    model.inputs = ('x', 'y', 'slit_id')
+    bind_compound_bounding_box(model, bbox, selector_args=[('slit_id', True)],
+                               ignored=['y'], order='F')
+    assert model.bounding_box == cbbox
+
+
+@pytest.mark.parametrize('int_type', [int, np.int32, np.int64, np.uint32, np.uint64])
+def test_model_integer_indexing(int_type):
+    """Regression for PR 12561; verify that compound model components
+     can be accessed by integer index"""
+    gauss = models.Gaussian2D()
+    airy = models.AiryDisk2D()
+    compound = gauss + airy
+
+    assert compound[int_type(0)] == gauss
+    assert compound[int_type(1)] == airy
+
+
+def test_model_string_indexing():
+    """Regression for PR 12561; verify that compound model components
+     can be accessed by indexing with model name"""
+    gauss = models.Gaussian2D()
+    gauss.name = 'Model1'
+    airy = models.AiryDisk2D()
+    airy.name = 'Model2'
+    compound = gauss + airy
+
+    assert compound['Model1'] == gauss
+    assert compound['Model2'] == airy

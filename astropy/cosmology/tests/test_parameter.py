@@ -6,14 +6,11 @@
 # IMPORTS
 
 # STDLIB
-import ast
 import inspect
-import sys
 
 # THIRD PARTY
-import pytest
-
 import numpy as np
+import pytest
 
 # LOCAL
 import astropy.units as u
@@ -273,17 +270,17 @@ class TestParameter(ParameterTestMixin):
         for cls in self.classes.values():
             _COSMOLOGY_CLASSES.pop(cls.__qualname__)
 
-    @pytest.fixture(params=["Example1", "Example2"])
+    @pytest.fixture(scope="class", params=["Example1", "Example2"])
     def cosmo_cls(self, request):
         """Cosmology class."""
         return self.classes[request.param]
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def cosmo(self, cosmo_cls):
         """Cosmology instance"""
         return cosmo_cls()
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def param(self, cosmo_cls):
         """Get Parameter 'param' from cosmology class."""
         return cosmo_cls.param

@@ -2,18 +2,18 @@
 # pylint: disable=invalid-name
 
 import types
+import warnings
 
-import pytest
 import numpy as np
-from numpy.testing import assert_allclose
+import pytest
 from numpy.random import default_rng
+from numpy.testing import assert_allclose
 
+from astropy.modeling import fitting, models
 from astropy.modeling.core import Fittable1DModel
 from astropy.modeling.parameters import Parameter
-from astropy.modeling import models
-from astropy.modeling import fitting
-from astropy.utils.exceptions import AstropyUserWarning
 from astropy.utils.compat.optional_deps import HAS_SCIPY  # noqa
+from astropy.utils.exceptions import AstropyUserWarning
 
 
 class TestNonLinearConstraints:
@@ -197,23 +197,22 @@ class TestBounds:
         gauss_fit = fitting.SLSQPLSQFitter()
         # Warning does not appear in all the CI jobs.
         # TODO: Rewrite the test for more consistent warning behavior.
-        with pytest.warns(None) as warning_lines:
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', message=r'.*The fit may be unsuccessful.*',
+                                    category=AstropyUserWarning)
             model = gauss_fit(gauss, X, Y, self.data)
-            x_mean = model.x_mean.value
-            y_mean = model.y_mean.value
-            x_stddev = model.x_stddev.value
-            y_stddev = model.y_stddev.value
-            assert x_mean + 10 ** -5 >= bounds['x_mean'][0]
-            assert x_mean - 10 ** -5 <= bounds['x_mean'][1]
-            assert y_mean + 10 ** -5 >= bounds['y_mean'][0]
-            assert y_mean - 10 ** -5 <= bounds['y_mean'][1]
-            assert x_stddev + 10 ** -5 >= bounds['x_stddev'][0]
-            assert x_stddev - 10 ** -5 <= bounds['x_stddev'][1]
-            assert y_stddev + 10 ** -5 >= bounds['y_stddev'][0]
-            assert y_stddev - 10 ** -5 <= bounds['y_stddev'][1]
-        for w in warning_lines:
-            assert issubclass(w.category, AstropyUserWarning)
-            assert 'The fit may be unsuccessful' in str(w.message)
+        x_mean = model.x_mean.value
+        y_mean = model.y_mean.value
+        x_stddev = model.x_stddev.value
+        y_stddev = model.y_stddev.value
+        assert x_mean + 10 ** -5 >= bounds['x_mean'][0]
+        assert x_mean - 10 ** -5 <= bounds['x_mean'][1]
+        assert y_mean + 10 ** -5 >= bounds['y_mean'][0]
+        assert y_mean - 10 ** -5 <= bounds['y_mean'][1]
+        assert x_stddev + 10 ** -5 >= bounds['x_stddev'][0]
+        assert x_stddev - 10 ** -5 <= bounds['x_stddev'][1]
+        assert y_stddev + 10 ** -5 >= bounds['y_stddev'][0]
+        assert y_stddev - 10 ** -5 <= bounds['y_stddev'][1]
 
 
 class TestLinearConstraints:

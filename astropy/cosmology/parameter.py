@@ -1,7 +1,8 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 
+import copy
+
 import astropy.units as u
-from astropy.utils.decorators import classproperty
 
 __all__ = ["Parameter"]
 
@@ -110,19 +111,26 @@ class Parameter:
     # descriptor and property-like methods
 
     def __get__(self, cosmology, cosmo_cls=None):
-        # get from class
+        # Get from class
         if cosmology is None:
             return self
+        # Get from instance
         return getattr(cosmology, self._attr_name_private)
 
     def __set__(self, cosmology, value):
         """Allows attribute setting once. Raises AttributeError subsequently."""
-        # raise error if setting 2nd time.
+        # Raise error if setting 2nd time.
         if hasattr(cosmology, self._attr_name_private):
-            raise AttributeError("can't set attribute")
+            raise AttributeError(f"can't set attribute {self._attr_name} again")
 
-        # validate value, generally setting units if present
-        value = self.validate(cosmology, value)
+        # Validate value, generally setting units if present
+        value = self.validate(cosmology, copy.deepcopy(value))
+
+        # Make the value read-only, if ndarray-like
+        if hasattr(value, "setflags"):
+            value.setflags(write=False)
+
+        # Set the value on the cosmology
         setattr(cosmology, self._attr_name_private, value)
 
     # -------------------------------------------
@@ -130,7 +138,7 @@ class Parameter:
 
     @property
     def fvalidate(self):
-        """Function to validate a potential value of this Parameter.."""
+        """Function to validate a potential value of this Parameter."""
         return self._fvalidate
 
     def validator(self, fvalidate):
@@ -216,7 +224,7 @@ class Parameter:
 
         Parameters
         ----------
-        interpreted : bool
+        processed : bool
             Whether to more closely reproduce the input arguments (`False`,
             default) or the processed arguments (`True`). The former is better
             for string representations and round-tripping with ``eval(repr())``.

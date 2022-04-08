@@ -17,9 +17,8 @@ returns an array of shape (``n_outputs``, ``n_inputs``).
 
 import numpy as np
 
-from .core import Model, ModelDefinitionError, CompoundModel
+from .core import CompoundModel, Model, ModelDefinitionError
 from .mappings import Mapping
-
 
 __all__ = ["is_separable", "separability_matrix"]
 
@@ -242,7 +241,7 @@ def _cstack(left, right):
         cright = _coord_matrix(right, 'right', noutp)
     else:
         cright = np.zeros((noutp, right.shape[1]))
-        cright[-right.shape[0]:, -right.shape[1]:] = 1
+        cright[-right.shape[0]:, -right.shape[1]:] = right
 
     return np.hstack([cleft, cright])
 
@@ -301,7 +300,9 @@ def _separable(transform):
         An array of shape (transform.n_outputs,) of boolean type
         Each element represents the separablity of the corresponding output.
     """
-    if isinstance(transform, CompoundModel):
+    if (transform_matrix := transform._calculate_separability_matrix()) is not NotImplemented:
+        return transform_matrix
+    elif isinstance(transform, CompoundModel):
         sepleft = _separable(transform.left)
         sepright = _separable(transform.right)
         return _operators[transform.op](sepleft, sepright)

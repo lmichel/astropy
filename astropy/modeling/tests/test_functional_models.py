@@ -1,16 +1,15 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 
 # pylint: disable=invalid-name
-import pytest
 import numpy as np
+import pytest
 from numpy.testing import assert_allclose, assert_array_equal, assert_array_less
 
 from astropy import units as u
-from astropy.modeling import models, InputParameterError
 from astropy.coordinates import Angle
-from astropy.modeling import fitting
-from astropy.utils.exceptions import AstropyUserWarning
+from astropy.modeling import InputParameterError, fitting, models
 from astropy.utils.compat.optional_deps import HAS_SCIPY  # noqa
+from astropy.utils.exceptions import AstropyUserWarning
 
 
 def test_sigma_constant():
@@ -20,8 +19,8 @@ def test_sigma_constant():
     it manually in astropy.modeling to avoid importing from
     astropy.stats.
     """
-    from astropy.stats.funcs import gaussian_sigma_to_fwhm
     from astropy.modeling.functional_models import GAUSSIAN_SIGMA_TO_FWHM
+    from astropy.stats.funcs import gaussian_sigma_to_fwhm
     assert gaussian_sigma_to_fwhm == GAUSSIAN_SIGMA_TO_FWHM
 
 
@@ -131,6 +130,19 @@ def test_Gaussian2D_invalid_inputs():
         models.Gaussian2D(theta=0, cov_matrix=cov_matrix)
 
 
+def test_Gaussian2D_theta():
+    theta = Angle(90, 'deg')
+    model1 = models.Gaussian2D(1, 25, 25, 15, 5, theta=theta)
+
+    theta2 = np.pi / 2.
+    model2 = models.Gaussian2D(1, 25, 25, 15, 5, theta=theta2)
+
+    assert model1.theta.quantity.to('radian').value == model2.theta.value
+    assert model1.bounding_box == model2.bounding_box
+
+    assert model1(619.42, 31.314) == model2(619.42, 31.314)
+
+
 @pytest.mark.parametrize('gamma', (10, -10))
 def test_moffat_fwhm(gamma):
     ans = 34.641016151377542
@@ -222,6 +234,19 @@ def test_Ellipse2D_circular():
                                theta=0)(x, y)
     disk = models.Disk2D(amplitude, radius, radius, radius)(x, y)
     assert np.all(ellipse == disk)
+
+
+def test_Ellipse2D_theta():
+    theta = Angle(90, 'deg')
+    model1 = models.Ellipse2D(1, 25, 25, 15, 5, theta=theta)
+
+    theta2 = np.pi / 2.
+    model2 = models.Ellipse2D(1, 25, 25, 15, 5, theta=theta2)
+
+    assert model1.theta.quantity.to('radian').value == model2.theta.value
+    assert model1.bounding_box == model2.bounding_box
+
+    assert model1(619.42, 31.314) == model2(619.42, 31.314)
 
 
 def test_Scale_inverse():
@@ -505,3 +530,16 @@ def test_trig_inverse(trig):
     x = np.arange(lower, upper, 0.01)
     assert_allclose(mdl.inverse(mdl(x)), x, atol=1e-10)
     assert_allclose(mdl(mdl.inverse(x)), x, atol=1e-10)
+
+
+@pytest.mark.skipif('not HAS_SCIPY')
+def test_Sersic2D_theta():
+    theta = Angle(90, 'deg')
+    model1 = models.Sersic2D(1, 5, 4, 25, 25, 0.5, theta=theta)
+
+    theta2 = np.pi / 2.
+    model2 = models.Sersic2D(1, 5, 4, 25, 25, 0.5, theta=theta2)
+
+    assert model1.theta.quantity.to('radian').value == model2.theta.value
+
+    assert model1(619.42, 31.314) == model2(619.42, 31.314)

@@ -19,6 +19,8 @@ import astropy.units as u
 from astropy.modeling.core import fix_inputs
 from astropy.modeling import models as astmodels
 
+from astropy.utils.compat.optional_deps import HAS_SCIPY
+
 
 def custom_and_analytical_inverse():
     p1 = astmodels.Polynomial1D(1)
@@ -82,6 +84,11 @@ test_models = [
     astmodels.Sersic1D(amplitude=10., r_eff=1., n=4.),
     astmodels.Sersic2D(amplitude=10., r_eff=1., n=4., x_0=0.5, y_0=1.5, ellip=0.0, theta=0.0),
     astmodels.Sine1D(amplitude=10., frequency=0.5, phase=1.),
+    astmodels.Cosine1D(amplitude=10., frequency=0.5, phase=1.),
+    astmodels.Tangent1D(amplitude=10., frequency=0.5, phase=1.),
+    astmodels.ArcSine1D(amplitude=10., frequency=0.5, phase=1.),
+    astmodels.ArcCosine1D(amplitude=10., frequency=0.5, phase=1.),
+    astmodels.ArcTangent1D(amplitude=10., frequency=0.5, phase=1.),
     astmodels.Trapezoid1D(amplitude=10., x_0=0.5, width=5., slope=1.),
     astmodels.TrapezoidDisk2D(amplitude=10., x_0=0.5, y_0=1.5, R_0=5., slope=1.),
     astmodels.Voigt1D(x_0=0.55, amplitude_L=10., fwhm_L=0.5, fwhm_G=0.9),
@@ -97,6 +104,10 @@ test_models = [
     custom_inputs_outputs(),
 ]
 
+if HAS_SCIPY:
+    test_models.append(astmodels.Spline1D(np.array([-3., -3., -3., -3., -1., 0., 1., 3.,  3.,  3.,  3.]),
+                       np.array([0.10412331, 0.07013616, -0.18799552, 1.35953147, -0.15282581, 0.03923, -0.04297299, 0., 0., 0., 0.]),
+                       3))
 
 math_models = []
 
@@ -314,7 +325,12 @@ def test_fix_inputs(tmpdir):
         if Version(asdf.__version__) <= Version('2.5.1'):
             warnings.filterwarnings('ignore', 'Unable to locate schema file')
 
-        model = astmodels.Pix2Sky_TAN() | astmodels.Rotation2D()
+        model0 = astmodels.Pix2Sky_TAN()
+        model0.input_units_equivalencies = {'x': u.dimensionless_angles(),
+                                            'y': u.dimensionless_angles()}
+        model1 = astmodels.Rotation2D()
+        model = model0 | model1
+
         tree = {
             'compound': fix_inputs(model, {'x': 45}),
             'compound1': fix_inputs(model, {0: 45})
@@ -379,3 +395,38 @@ model: !transform/concatenate-1.2.0
         model = af["model"]
         assert model.has_inverse()
         assert model.inverse(-5, -20) == (0, 0)
+
+
+# test some models and compound models with some input unit equivalencies
+def models_with_input_eq():
+    # 1D model
+    m1 = astmodels.Shift(1*u.kg)
+    m1.input_units_equivalencies = {'x': u.mass_energy()}
+
+    # 2D model
+    m2 = astmodels.Const2D(10*u.Hz)
+    m2.input_units_equivalencies = {'x': u.dimensionless_angles(),
+                                    'y': u.dimensionless_angles()}
+
+    # 2D model with only one input equivalencies
+    m3 = astmodels.Const2D(10*u.Hz)
+    m3.input_units_equivalencies = {'x': u.dimensionless_angles()}
+
+    # model using equivalency that has args using units
+    m4 = astmodels.PowerLaw1D(amplitude=1*u.m, x_0=10*u.pix, alpha=7)
+    m4.input_units_equivalencies = {'x': u.equivalencies.pixel_scale(0.5*u.arcsec/u.pix)}
+
+    return[m1, m2, m3, m4]
+
+
+def compound_models_with_input_eq():
+    m1 = astmodels.Gaussian1D(10*u.K, 11*u.arcsec, 12*u.arcsec)
+    m1.input_units_equivalencies = {'x': u.parallax()}
+    m2 = astmodels.Gaussian1D(5*u.s, 2*u.K, 3*u.K)
+    m2.input_units_equivalencies = {'x': u.temperature()}
+
+    return  [m1|m2, m1&m2, m1+m2]
+
+
+test_models.extend(models_with_input_eq())
+test_models.extend(compound_models_with_input_eq())

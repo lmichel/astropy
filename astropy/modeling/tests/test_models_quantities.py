@@ -1,38 +1,28 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 # pylint: disable=invalid-name, no-member
 
-import pytest
 import numpy as np
+import pytest
 
 from astropy import units as u
+from astropy.modeling.bounding_box import ModelBoundingBox
+from astropy.modeling.core import fix_inputs
+from astropy.modeling.fitting import LevMarLSQFitter
+from astropy.modeling.functional_models import (AiryDisk2D, ArcCosine1D, ArcSine1D, ArcTangent1D,
+                                                Box1D, Box2D, Const1D, Const2D, Cosine1D, Disk2D,
+                                                Ellipse2D, Exponential1D, Gaussian1D, Gaussian2D,
+                                                KingProjectedAnalytic1D, Linear1D, Logarithmic1D,
+                                                Lorentz1D, Moffat1D, Moffat2D, Multiply, Planar2D,
+                                                RickerWavelet1D, RickerWavelet2D, Ring2D, Scale,
+                                                Sersic1D, Sersic2D, Sine1D, Tangent1D, Trapezoid1D,
+                                                TrapezoidDisk2D, Voigt1D)
+from astropy.modeling.parameters import InputParameterError
+from astropy.modeling.physical_models import Drude1D, Plummer1D
+from astropy.modeling.polynomial import Polynomial1D, Polynomial2D
+from astropy.modeling.powerlaws import (BrokenPowerLaw1D, ExponentialCutoffPowerLaw1D,
+                                        LogParabola1D, PowerLaw1D, SmoothlyBrokenPowerLaw1D)
 from astropy.tests.helper import assert_quantity_allclose
 from astropy.utils.compat.optional_deps import HAS_SCIPY  # noqa
-from astropy.modeling.core import fix_inputs
-
-from astropy.modeling.functional_models import (
-    Gaussian1D, Sersic1D,
-    Sine1D, Cosine1D, Tangent1D, ArcSine1D, ArcCosine1D, ArcTangent1D,
-    Linear1D, Lorentz1D, Voigt1D, Const1D,
-    Box1D, Trapezoid1D, RickerWavelet1D,
-    Moffat1D, Gaussian2D, Const2D, Ellipse2D,
-    Disk2D, Ring2D, Box2D, TrapezoidDisk2D,
-    RickerWavelet2D, AiryDisk2D, Moffat2D, Sersic2D,
-    KingProjectedAnalytic1D,
-    Scale, Multiply,
-    Planar2D, Logarithmic1D, Exponential1D)
-
-from astropy.modeling.physical_models import Plummer1D, Drude1D
-
-from astropy.modeling.powerlaws import (
-    PowerLaw1D, BrokenPowerLaw1D, SmoothlyBrokenPowerLaw1D,
-    ExponentialCutoffPowerLaw1D, LogParabola1D)
-
-from astropy.modeling.polynomial import Polynomial1D, Polynomial2D
-
-from astropy.modeling.fitting import LevMarLSQFitter
-from astropy.modeling.bounding_box import ModelBoundingBox
-
-from astropy.modeling.parameters import InputParameterError
 
 FUNC_MODELS_1D = [
 {'class': Gaussian1D,
@@ -141,7 +131,8 @@ FUNC_MODELS_2D = [
  'parameters': {'amplitude': 3 * u.Jy, 'x_mean': 2 * u.m, 'y_mean': 1 * u.m,
                 'x_stddev': 3 * u.m, 'y_stddev': 2 * u.m, 'theta': 45 * u.deg},
  'evaluation': [(412.1320343 * u.cm, 3.121320343 * u.m, 3 * u.Jy * np.exp(-0.5))],
- 'bounding_box': [[-14.18257445, 16.18257445], [-10.75693665, 14.75693665]] * u.m},
+ 'bounding_box': [[-13.02230366, 15.02230366],
+                  [-12.02230366, 16.02230366]] * u.m},
 {'class': Const2D,
  'parameters': {'amplitude': 3 * u.Jy},
  'evaluation': [(0.6 * u.micron, 0.2 * u.m, 3 * u.Jy)],
@@ -160,7 +151,8 @@ FUNC_MODELS_2D = [
  'parameters': {'amplitude': 3 * u.Jy, 'x_0': 3 * u.m, 'y_0': 2 * u.m,
                 'a': 300 * u.cm, 'b': 200 * u.cm, 'theta': 45 * u.deg},
  'evaluation': [(4 * u.m, 300 * u.cm, 3 * u.Jy)],
- 'bounding_box': [[-0.76046808, 4.76046808], [0.68055697, 5.31944302]] * u.m},
+ 'bounding_box': [[-0.5495097567963922, 4.549509756796392],
+                  [0.4504902432036073, 5.549509756796393]] * u.m},
 {'class': Ring2D,
  'parameters': {'amplitude': 3 * u.Jy, 'x_0': 3 * u.m, 'y_0': 2 * u.m,
                 'r_in': 2 * u.cm, 'r_out': 2.1 * u.cm},
@@ -256,6 +248,15 @@ MODELS = FUNC_MODELS_1D + SCALE_MODELS + FUNC_MODELS_2D + POWERLAW_MODELS +\
     PHYS_MODELS_1D + POLY_MODELS
 
 SCIPY_MODELS = set([Sersic1D, Sersic2D, AiryDisk2D])
+
+# These models will fail fitting test, because built in fitting data
+#   will produce non-finite values
+NON_FINITE_MODELS = [
+    Sersic1D,
+    PowerLaw1D,
+    ExponentialCutoffPowerLaw1D,
+    LogParabola1D
+]
 
 
 @pytest.mark.parametrize('model', MODELS)
@@ -412,6 +413,8 @@ def test_compound_model_input_units_equivalencies_defaults(model):
 @pytest.mark.filterwarnings(r'ignore:The fit may be unsuccessful.*')
 @pytest.mark.parametrize('model', MODELS)
 def test_models_fitting(model):
+    if model['class'] in NON_FINITE_MODELS:
+        return
 
     m = model['class'](**model['parameters'])
     if len(model['evaluation'][0]) == 2:

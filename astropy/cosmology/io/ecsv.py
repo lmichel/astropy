@@ -2,9 +2,9 @@
 
 import astropy.cosmology.units as cu
 import astropy.units as u
-from astropy.table import QTable
 from astropy.cosmology.connect import readwrite_registry
 from astropy.cosmology.core import Cosmology
+from astropy.table import QTable
 
 from .table import from_table, to_table
 
@@ -62,7 +62,7 @@ def write_ecsv(cosmology, file, *, overwrite=False, cls=QTable, cosmology_in_met
 
     overwrite : bool
         Whether to overwrite the file, if it exists.
-    cls: type (optional, keyword-only)
+    cls : type (optional, keyword-only)
         Astropy :class:`~astropy.table.Table` (sub)class to use when writing.
         Default is :class:`~astropy.table.QTable`.
     cosmology_in_meta : bool

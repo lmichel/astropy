@@ -9,7 +9,7 @@ import warnings
 # TODO: This list is a duplicate of the dependencies in setup.cfg "all", but
 # some of the package names are different from the pip-install name (e.g.,
 # beautifulsoup4 -> bs4).
-_optional_deps = ['asdf', 'bleach', 'bottleneck', 'bs4', 'bz2', 'h5py',
+_optional_deps = ['asdf', 'asdf_astropy', 'bleach', 'bottleneck', 'bs4', 'bz2', 'h5py',
                   'html5lib', 'IPython', 'jplephem', 'lxml', 'matplotlib',
                   'mpmath', 'pandas', 'PIL', 'pytz', 'scipy', 'skyfield',
                   'sortedcontainers', 'lzma', 'pyarrow']
@@ -27,6 +27,7 @@ def __getattr__(name):
         module_name = name[4:]
 
         if module_name == "YAML":
+            from astropy.utils.exceptions import AstropyDeprecationWarning
             warnings.warn(
                 "PyYaml is now a strict dependency. HAS_YAML is deprecated as "
                 "of v5.0 and will be removed in a subsequent version.",

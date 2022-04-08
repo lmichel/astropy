@@ -316,7 +316,8 @@ class BaseInputter:
             Can be either a file name, string (newline separated) with all header and data
             lines (must have at least 2 lines), a file-like object with a
             ``read()`` method, or a list of strings.
-        newline: line separator, if `None` use OS default from ``splitlines()``.
+        newline :
+            Line separator. If `None` use OS default from ``splitlines()``.
 
         Returns
         -------
@@ -451,7 +452,11 @@ class DefaultSplitter(BaseSplitter):
         If splitting on whitespace then replace unquoted tabs with space first"""
         if self.delimiter == r'\s':
             line = _replace_tab_with_space(line, self.escapechar, self.quotechar)
-        return line.strip()
+        return line.strip() + '\n'
+
+    def process_val(self, val):
+        """Remove whitespace at the beginning or end of value."""
+        return val.strip(' \t')
 
     def __call__(self, lines):
         """Return an iterator over the table ``lines``, where each iterator output
@@ -496,11 +501,10 @@ class DefaultSplitter(BaseSplitter):
                                         doublequote=self.doublequote,
                                         escapechar=self.escapechar,
                                         quotechar=self.quotechar,
-                                        quoting=self.quoting,
-                                        lineterminator='')
+                                        quoting=self.quoting)
         if self.process_val:
             vals = [self.process_val(x) for x in vals]
-        out = self.csv_writer.writerow(vals)
+        out = self.csv_writer.writerow(vals).rstrip('\r\n')
 
         return out
 
@@ -1671,7 +1675,7 @@ extra_writer_pars = ('delimiter', 'comment', 'quotechar', 'formats',
 def _get_writer(Writer, fast_writer, **kwargs):
     """Initialize a table writer allowing for common customizations. This
     routine is for internal (package) use only and is useful because it depends
-    only on the "core" module. """
+    only on the "core" module."""
 
     from .fastbasic import FastBasic
 
@@ -1708,7 +1712,7 @@ def _get_writer(Writer, fast_writer, **kwargs):
             # Restore the default SplitterClass process_val method which strips
             # whitespace.  This may have been changed in the Writer
             # initialization (e.g. Rdb and Tab)
-            writer.data.splitter.process_val = operator.methodcaller('strip')
+            writer.data.splitter.process_val = operator.methodcaller('strip', ' \t')
         else:
             writer.data.splitter.process_val = None
     if 'names' in kwargs:

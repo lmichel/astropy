@@ -1,12 +1,10 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 
-import copy
-
 import numpy as np
 
 from astropy.cosmology.connect import convert_registry
 from astropy.cosmology.core import Cosmology
-from astropy.table import QTable, Table, Column
+from astropy.table import Column, QTable, Table
 
 from .mapping import to_mapping
 from .row import from_row
@@ -147,7 +145,7 @@ def to_table(cosmology, *args, cls=QTable, cosmology_in_meta=True):
     *args
         Not used. Needed for compatibility with
         `~astropy.io.registry.UnifiedReadWriteMethod`
-    cls: type (optional, keyword-only)
+    cls : type (optional, keyword-only)
         Astropy :class:`~astropy.table.Table` class or subclass type to return.
         Default is :class:`~astropy.table.QTable`.
     cosmology_in_meta : bool

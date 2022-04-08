@@ -1,3 +1,216 @@
+5.0.4 (2022-03-31)
+==================
+
+Bug Fixes
+---------
+
+astropy.modeling
+^^^^^^^^^^^^^^^^
+
+- Fixed the ``Gaussian2D`` ``bounding_box`` when ``theta`` is an angular
+  ``Quantity``. [#13021]
+
+astropy.utils
+^^^^^^^^^^^^^
+
+- Reverted ``astropy.utils.iers.iers.IERS_A_URL`` to ``maia.usno.navy.mil`` domain instead
+  of NASA FTP to work around server issues. [#13004]
+
+Other Changes and Additions
+---------------------------
+
+- Updated bundled WCSLIB to version 7.9 with several bugfixes and added
+  support for time coordinate axes in ``wcsset()`` and ``wcssub()``. The
+  four-digit type code for the time axis will have the first digit set to 4,
+  i.e., four digit code will be 4xxx where x is a digit 0-9. For a full list of
+  bug fixes see https://www.atnf.csiro.au/people/mcalabre/WCS/CHANGES [#12994]
+
+
+5.0.3 (2022-03-25)
+==================
+
+Bug Fixes
+---------
+
+astropy.convolution
+^^^^^^^^^^^^^^^^^^^
+
+- Bugfix in ``astropy.convolution.utils.discretize_model`` which allows the function to handle a ``CompoundModel``.
+  Before this fix, ``discretize_model`` was confusing ``CompoundModel`` with a callable function. [#12959]
+
+astropy.io.fits
+^^^^^^^^^^^^^^^
+
+- Fix write and read FITS tables with multidimensional items, using ``from_columns``
+  without previousely defined ``ColDefs`` structure. [#12863]
+
+astropy.io.votable
+^^^^^^^^^^^^^^^^^^
+
+- Fix VOTable linting to avoid use of shell option. [#12985]
+
+astropy.utils
+^^^^^^^^^^^^^
+
+- Fix XML linting to avoid use of shell option. [#12985]
+
+Other Changes and Additions
+---------------------------
+
+- Updated the bundled CFITSIO library to 4.1.0. [#12967]
+
+5.0.2 (2022-03-10)
+==================
+
+Bug Fixes
+---------
+
+astropy.io.ascii
+^^^^^^^^^^^^^^^^
+
+- Bugfix to add backwards compatibility for reading ECSV version 0.9 files with
+  non-standard column datatypes (such as ``object``, ``str``, ``datetime64``,
+  etc.), which would raise a ValueError in ECSV version 1.0. [#12880]
+
+astropy.io.misc
+^^^^^^^^^^^^^^^
+
+- Bugfix for ``units_mapping`` schema's property name conflicts. Changes:
+      * ``inputs`` to ``unit_inputs``
+      * ``outputs`` to ``unit_outputs`` [#12800]
+
+astropy.io.votable
+^^^^^^^^^^^^^^^^^^
+
+- Fixed a bug where ``astropy.io.votable.validate`` was printing output to
+  ``sys.stdout`` when the ``output`` paramter was set to ``None``. ``validate``
+  now returns a string when ``output`` is set to ``None``, as documented.
+  [#12604]
+
+astropy.modeling
+^^^^^^^^^^^^^^^^
+
+- Fix handling of units on ``scale`` parameter in BlackBody model. [#12318]
+
+- Indexing on models can now be used with all types of integers
+  (like ``numpy.int64``) instead of just ``int``. [#12561]
+
+- Fix computation of the separability of a ``CompoundModel`` where another
+  ``CompoundModel`` is on the right hand side of the ``&`` operator. [#12907]
+
+- Provide a hook (``Model._calculate_separability_matrix``) to allow subclasses
+  of ``Model`` to define how to compute their separability matrix. [#12900]
+
+astropy.stats
+^^^^^^^^^^^^^
+
+- Fixed a bug in which running ``kuiper_false_positive_probability(D,N)`` on
+  distributions with many data points could produce NaN values for the false
+  positive probability of the Kuiper statistic. [#12896]
+
+astropy.wcs
+^^^^^^^^^^^
+
+- Fixed a bug due to which ``naxis``, ``pixel_shape``, and
+  ``pixel_bounds`` attributes of ``astropy.wcs.WCS`` were not restored when
+  an ``astropy.wcs.WCS`` object was unpickled. This fix also eliminates
+  ``FITSFixedWarning`` warning issued during unpiclikng of the WCS objects
+  related to the number of axes. This fix also eliminates errors when
+  unpickling WCS objects originally created using non-default values for
+  ``key``, ``colsel``, and ``keysel`` parameters. [#12844]
+
+5.0.1 (2022-01-26)
+==================
+
+Bug Fixes
+---------
+
+astropy.coordinates
+^^^^^^^^^^^^^^^^^^^
+
+- Trying to create an instance of ``astropy.coordinates.Distance`` by providing
+  both ``z`` and ``parallax`` now raises the expected ``ValueError``. [#12531]
+
+- Fixed a bug where changing the wrap angle of the longitude component of a
+  representation could raise a warning or error in certain situations. [#12556]
+
+- ``astropy.coordinates.Distance`` constructor no longer ignores the ``unit``
+  keyword when ``parallax`` is provided. [#12569]
+
+astropy.cosmology
+^^^^^^^^^^^^^^^^^
+
+- ``astropy.cosmology.utils.aszarr`` can now convert ``Column`` objects. [#12525]
+
+- Reading a cosmology from an ECSV will load redshift and Hubble parameter units
+  from the cosmology units module. [#12636]
+
+astropy.io.fits
+^^^^^^^^^^^^^^^
+
+- Fix formatting issue in ``_dump_coldefs`` and add tests for ``tabledump`` and
+  ``tableload`` convenience functions. [#12526]
+
+astropy.io.misc
+^^^^^^^^^^^^^^^
+
+- YAML can now also represent quantities and arrays with structured dtype,
+  as well as structured scalars based on ``np.void``. [#12509]
+
+astropy.modeling
+^^^^^^^^^^^^^^^^
+
+- Fixes error when fitting multiplication or division based compound models
+  where the sub-models have different output units. [#12475]
+
+- Bugfix for incorrectly initialized and filled ``parameters`` data for ``Spline1D`` model. [#12523]
+
+- Bugfix for ``keyerror`` thrown by ``Model.input_units_equivalencies`` when
+  used on ``fix_inputs`` models which have no set unit equivalencies. [#12597]
+
+astropy.table
+^^^^^^^^^^^^^
+
+- ``astropy.table.Table.keep_columns()`` and
+  ``astropy.table.Table.remove_columns()`` now work with generators of column
+  names. [#12529]
+
+- Avoid duplicate storage of info in serialized columns if the column
+  used to serialize already can hold that information. [#12607]
+
+astropy.timeseries
+^^^^^^^^^^^^^^^^^^
+
+- Fixed edge case bugs which emerged when using ``aggregate_downsample`` with custom bins. [#12527]
+
+astropy.units
+^^^^^^^^^^^^^
+
+- Structured units can be serialized to/from yaml. [#12492]
+
+- Fix bad typing problems by removing interaction with ``NDArray.__class_getitem__``. [#12511]
+
+- Ensure that ``Quantity.to_string(format='latex')`` properly typesets exponents
+  also when ``u.quantity.conf.latex_array_threshold = -1`` (i.e., when the threshold
+  is taken from numpy). [#12573]
+
+- Structured units can now be copied with ``copy.copy`` and ``copy.deepcopy``
+  and also pickled and unpicked also for ``protocol`` >= 2.
+  This does not work for big-endian architecture with older ``numpy<1.21.1``. [#12583]
+
+astropy.utils
+^^^^^^^^^^^^^
+
+- Ensure that a ``Masked`` instance can be used to initialize (or viewed
+  as) a ``numpy.ma.Maskedarray``. [#12482]
+
+- Ensure ``Masked`` also works with numpy >=1.22, which has a keyword argument
+  name change for ``np.quantile``. [#12511]
+
+- ``astropy.utils.iers.LeapSeconds.auto_open()`` no longer emits unnecessary
+  warnings when ``astropy.utils.iers.conf.auto_max_age`` is set to ``None``. [#12713]
+
+
 5.0 (2021-11-15)
 ================
 

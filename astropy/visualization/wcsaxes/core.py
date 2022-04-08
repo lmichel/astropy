@@ -12,6 +12,8 @@ from matplotlib.transforms import Affine2D, Bbox, Transform
 
 import astropy.units as u
 from astropy.coordinates import SkyCoord, BaseCoordinateFrame
+from astropy.utils import minversion
+from astropy.utils.compat.optional_deps import HAS_PIL
 from astropy.wcs import WCS
 from astropy.wcs.wcsapi import BaseHighLevelWCS, BaseLowLevelWCS
 
@@ -195,16 +197,15 @@ class WCSAxes(Axes):
         elif origin == 'upper':
             raise ValueError("Cannot use images with origin='upper' in WCSAxes.")
 
-        # To check whether the image is a PIL image we can check if the data
-        # has a 'getpixel' attribute - this is what Matplotlib's AxesImage does
+        if HAS_PIL:
+            from PIL.Image import Image
 
-        try:
-            from PIL.Image import Image, FLIP_TOP_BOTTOM
-        except ImportError:
-            # We don't need to worry since PIL is not installed, so user cannot
-            # have passed RGB image.
-            pass
-        else:
+            if minversion('PIL', '9.1'):
+                from PIL.Image import Transpose
+                FLIP_TOP_BOTTOM = Transpose.FLIP_TOP_BOTTOM
+            else:
+                from PIL.Image import FLIP_TOP_BOTTOM
+
             if isinstance(X, Image) or hasattr(X, 'getpixel'):
                 X = X.transpose(FLIP_TOP_BOTTOM)
 
@@ -288,8 +289,8 @@ class WCSAxes(Axes):
 
         See Also
         --------
-
-        matplotlib.axes.Axes.plot : This method is called from this function with all arguments passed to it.
+        matplotlib.axes.Axes.plot :
+            This method is called from this function with all arguments passed to it.
 
         """
 

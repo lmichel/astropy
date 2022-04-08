@@ -116,7 +116,6 @@ class _TableLikeHDU(_ValidHDU):
 
         Notes
         -----
-
         Any additional keyword arguments accepted by the HDU class's
         ``__init__`` may also be passed in as keyword arguments.
         """
@@ -1294,7 +1293,7 @@ class BinTableHDU(_TableBaseHDU):
         for column in self.columns:
             line = [column.name, column.format]
             attrs = ['disp', 'unit', 'dim', 'null', 'bscale', 'bzero']
-            line += ['{:16s}'.format(value if value else '""')
+            line += ['{!s:16s}'.format(value if value else '""')
                      for value in (getattr(column, attr) for attr in attrs)]
             fileobj.write(' '.join(line))
             fileobj.write('\n')

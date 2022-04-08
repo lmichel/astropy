@@ -1,9 +1,3 @@
-# We need to import this here and run metadata.version to make sure
-# metadata.version('numpy') works correctly in the astropy code itself.
-from importlib import metadata
-
-metadata.version('numpy')
-
 import os
 import shutil
 import sys
@@ -70,6 +64,10 @@ os.remove(os.path.join('astropy_tests', 'modeling', 'tests', 'test_convolution.p
 os.remove(os.path.join('astropy_tests', 'modeling', 'tests', 'test_core.py'))
 os.remove(os.path.join('astropy_tests', 'visualization', 'tests', 'test_lupton_rgb.py'))
 
+# FIXME: PIL minversion check does not work
+os.remove(os.path.join('astropy_tests', 'visualization', 'wcsaxes', 'tests', 'test_misc.py'))
+os.remove(os.path.join('astropy_tests', 'visualization', 'wcsaxes', 'tests', 'test_wcsapi.py'))
+
 # FIXME: The following tests rely on the fully qualified name of classes which
 # don't seem to be the same.
 os.remove(os.path.join('astropy_tests', 'table', 'mixins', 'tests', 'test_registry.py'))
@@ -106,5 +104,4 @@ sys.exit(pytest.main(['astropy_tests',
                      plugins=['pytest_doctestplus.plugin',
                               'pytest_openfiles.plugin',
                               'pytest_remotedata.plugin',
-                              'pytest_mpl.plugin',
                               'pytest_astropy_header.display']))

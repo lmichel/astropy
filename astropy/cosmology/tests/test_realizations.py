@@ -11,9 +11,25 @@ import astropy.cosmology.units as cu
 import astropy.units as u
 from astropy import cosmology
 from astropy.cosmology import parameters, realizations
-from astropy.cosmology.realizations import default_cosmology, Planck13
-from astropy.tests.helper import pickle_protocol
-from astropy.utils.exceptions import AstropyDeprecationWarning
+from astropy.cosmology.realizations import Planck13, default_cosmology
+
+
+def test_realizations_in_toplevel_dir():
+    """Test the realizations are in ``dir`` of :mod:`astropy.cosmology`."""
+    d = dir(cosmology)
+
+    assert set(d) == set(cosmology.__all__)
+    for n in parameters.available:
+        assert n in d
+
+
+def test_realizations_in_realizations_dir():
+    """Test the realizations are in ``dir`` of :mod:`astropy.cosmology.realizations`."""
+    d = dir(realizations)
+
+    assert set(d) == set(realizations.__all__)
+    for n in parameters.available:
+        assert n in d
 
 
 class Test_default_cosmology(object):

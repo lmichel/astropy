@@ -3,13 +3,13 @@
 """
 This module provides utility functions for the models package.
 """
+import warnings
 # pylint: disable=invalid-name
 from collections import UserDict
 from collections.abc import MutableMapping
 from inspect import signature
 
 import numpy as np
-import warnings
 
 from astropy import units as u
 from astropy.utils.decorators import deprecated
@@ -200,7 +200,7 @@ def poly_map_domain(oldx, domain, window):
     domain = np.array(domain, dtype=np.float64)
     window = np.array(window, dtype=np.float64)
     if domain.shape != (2,) or window.shape != (2,):
-        raise ValueError('Expected "domain" and window to be a tuple of size 2.')
+        raise ValueError('Expected "domain" and "window" to be a tuple of size 2.')
     scl = (window[1] - window[0]) / (domain[1] - domain[0])
     off = (window[0] * domain[1] - window[1] * domain[0]) / (domain[1] - domain[0])
     return off + scl * oldx
@@ -261,17 +261,20 @@ def combine_labels(left, right):
 
 def ellipse_extent(a, b, theta):
     """
-    Calculates the extent of a box encapsulating a rotated 2D ellipse.
+    Calculates the half size of a box encapsulating a rotated 2D
+    ellipse.
 
     Parameters
     ----------
     a : float or `~astropy.units.Quantity`
-        Major axis.
+        The ellipse semimajor axis.
     b : float or `~astropy.units.Quantity`
-        Minor axis.
+        The ellipse semiminor axis.
     theta : float or `~astropy.units.Quantity` ['angle']
-        Rotation angle. If given as a floating-point value, it is assumed to be
-        in radians.
+        The rotation angle as an angular quantity
+        (`~astropy.units.Quantity` or `~astropy.coordinates.Angle`) or
+        a value in radians (as a float). The rotation angle increases
+        counterclockwise.
 
     Returns
     -------
@@ -294,14 +297,11 @@ def ellipse_extent(a, b, theta):
         y0 = 50
         a = 30
         b = 10
-        theta = np.pi/4
+        theta = np.pi / 4
 
         model = Ellipse2D(amplitude, x0, y0, a, b, theta)
-
         dx, dy = ellipse_extent(a, b, theta)
-
         limits = [x0 - dx, x0 + dx, y0 - dy, y0 + dy]
-
         model.bounding_box = limits
 
         image = render_model(model)
@@ -310,6 +310,13 @@ def ellipse_extent(a, b, theta):
                   extent = limits)
         plt.show()
     """
+    from .parameters import Parameter  # prevent circular import
+
+    if isinstance(theta, Parameter):
+        if theta.quantity is None:
+            theta = theta.value
+        else:
+            theta = theta.quantity
 
     t = np.arctan2(-b * np.tan(theta), a)
     dx = a * np.cos(t) * np.cos(theta) - b * np.sin(t) * np.sin(theta)

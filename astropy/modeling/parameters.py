@@ -17,9 +17,8 @@ import numpy as np
 
 from astropy.units import Quantity
 from astropy.utils import isiterable
-from .utils import array_repr_oneline
-from .utils import get_inputs_and_params
 
+from .utils import array_repr_oneline, get_inputs_and_params
 
 __all__ = ['Parameter', 'InputParameterError', 'ParameterError']
 
@@ -686,8 +685,6 @@ class Parameter:
     __rmul__ = _binary_arithmetic_operation(operator.mul, reflected=True)
     __pow__ = _binary_arithmetic_operation(operator.pow)
     __rpow__ = _binary_arithmetic_operation(operator.pow, reflected=True)
-    __div__ = _binary_arithmetic_operation(operator.truediv)
-    __rdiv__ = _binary_arithmetic_operation(operator.truediv, reflected=True)
     __truediv__ = _binary_arithmetic_operation(operator.truediv)
     __rtruediv__ = _binary_arithmetic_operation(operator.truediv,
                                                 reflected=True)

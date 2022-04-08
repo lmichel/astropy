@@ -16,7 +16,7 @@ import numpy
 from extension_helpers import import_file, write_if_different, get_compiler, pkg_config
 
 WCSROOT = os.path.relpath(os.path.dirname(__file__))
-WCSVERSION = "7.7"
+WCSVERSION = "7.9"
 
 
 def b(s):
@@ -295,6 +295,8 @@ def get_extensions():
         'util.c',
         'wcslib_wrap.c',
         'wcslib_auxprm_wrap.c',
+        'wcslib_prjprm_wrap.c',
+        'wcslib_celprm_wrap.c',
         'wcslib_tabprm_wrap.c',
         'wcslib_wtbarr_wrap.c'
     ]

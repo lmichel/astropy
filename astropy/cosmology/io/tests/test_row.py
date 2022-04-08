@@ -4,23 +4,16 @@
 import pytest
 
 # LOCAL
-import astropy.units as u
-from astropy import cosmology
-from astropy.cosmology import Cosmology, realizations, Planck18
-from astropy.cosmology.core import _COSMOLOGY_CLASSES, Parameter
+from astropy.cosmology.core import _COSMOLOGY_CLASSES, Cosmology
 from astropy.cosmology.io.row import from_row, to_row
 from astropy.table import Row
-from astropy.cosmology.parameters import available
 
-from .base import IOTestMixinBase, IOFormatTestBase
-
-cosmo_instances = [getattr(realizations, name) for name in available]
-cosmo_instances.append("TestToFromRow.setup.<locals>.CosmologyWithKwargs")
+from .base import ToFromDirectTestBase, ToFromTestMixinBase
 
 ###############################################################################
 
 
-class ToFromRowTestMixin(IOTestMixinBase):
+class ToFromRowTestMixin(ToFromTestMixinBase):
     """
     Tests for a Cosmology[To/From]Format with ``format="astropy.row"``.
     This class will not be directly called by :mod:`pytest` since its name does
@@ -108,8 +101,22 @@ class ToFromRowTestMixin(IOTestMixinBase):
         """
         pass  # there are no partial info options
 
+    @pytest.mark.parametrize("format", [True, False, None, "astropy.row"])
+    def test_is_equivalent_to_row(self, cosmo, to_format, format):
+        """Test :meth:`astropy.cosmology.Cosmology.is_equivalent`.
 
-class TestToFromTable(IOFormatTestBase, ToFromRowTestMixin):
+        This test checks that Cosmology equivalency can be extended to any
+        Python object that can be converted to a Cosmology -- in this case
+        a Row.
+        """
+        obj = to_format("astropy.row")
+        assert not isinstance(obj, Cosmology)
+
+        is_equiv = cosmo.is_equivalent(obj, format=format)
+        assert is_equiv is (True if format is not False else False)
+
+
+class TestToFromTable(ToFromDirectTestBase, ToFromRowTestMixin):
     """
     Directly test ``to/from_row``.
     These are not public API and are discouraged from use, in favor of

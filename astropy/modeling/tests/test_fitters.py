@@ -4,29 +4,28 @@ Module to test fitting routines
 """
 # pylint: disable=invalid-name
 import os.path
-import warnings
-from unittest import mock
-from importlib.metadata import EntryPoint
-
-import pytest
-import numpy as np
 import unittest.mock as mk
+import warnings
+from importlib.metadata import EntryPoint
+from unittest import mock
+
+import numpy as np
+import pytest
 from numpy import linalg
 from numpy.testing import assert_allclose, assert_almost_equal, assert_equal
 
 from astropy.modeling import models
 from astropy.modeling.core import Fittable2DModel, Parameter
-from astropy.modeling.fitting import (
-    SimplexLSQFitter, SLSQPLSQFitter, LinearLSQFitter, LevMarLSQFitter,
-    JointFitter, Fitter, FittingWithOutlierRemoval)
+from astropy.modeling.fitting import (Fitter, FittingWithOutlierRemoval, JointFitter,
+                                      LevMarLSQFitter, LinearLSQFitter, NonFiniteValueError,
+                                      SimplexLSQFitter, SLSQPLSQFitter, populate_entry_points)
 from astropy.modeling.optimizers import Optimization
-from astropy.utils import NumpyRNGContext
-from astropy.utils.data import get_pkg_data_filename
 from astropy.stats import sigma_clip
-
+from astropy.utils import NumpyRNGContext
 from astropy.utils.compat.optional_deps import HAS_SCIPY
+from astropy.utils.data import get_pkg_data_filename
 from astropy.utils.exceptions import AstropyUserWarning
-from astropy.modeling.fitting import populate_entry_points
+
 from . import irafutil
 
 if HAS_SCIPY:
@@ -1246,3 +1245,18 @@ class TestFittingUncertanties:
 
         # test indexing for stds class.
         assert fit_mod.stds[1] == fit_mod.stds['intercept']
+
+
+@pytest.mark.skipif('not HAS_SCIPY')
+def test_non_finite_filter():
+    """Regression test filter introduced to solve issues #3575 and #12809"""
+
+    x = np.array([1, 2, 3, 4, 5, np.nan, 7, np.inf])
+    y = np.array([9, np.nan, 11, np.nan, 13, np.nan, 15, 16])
+
+    m_init = models.Gaussian1D()
+    fit = LevMarLSQFitter()
+
+    # Raise warning, notice fit fails due to nans
+    with pytest.raises(NonFiniteValueError, match=r"Objective function has encountered.*"):
+        fit(m_init, x, y)

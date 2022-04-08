@@ -22,7 +22,13 @@ DELIMITERS = (' ', ',')
 ECSV_DATATYPES = (
     'bool', 'int8', 'int16', 'int32', 'int64', 'uint8', 'uint16',
     'uint32', 'uint64', 'float16', 'float32', 'float64',
-    'float128', 'string')
+    'float128', 'string')  # Raise warning if not one of these standard dtypes
+
+
+class InvalidEcsvDatatypeWarning(AstropyUserWarning):
+    """
+    ECSV specific Astropy warning class.
+    """
 
 
 class EcsvHeader(basic.BasicHeader):
@@ -129,7 +135,6 @@ class EcsvHeader(basic.BasicHeader):
         match = re.match(ecsv_header_re, lines[0].strip(), re.VERBOSE)
         if not match:
             raise core.InconsistentTableError(no_header_msg)
-        # ecsv_version could be constructed here, but it is not currently used.
 
         try:
             header = meta.get_header_from_yaml(lines)
@@ -173,9 +178,15 @@ class EcsvHeader(basic.BasicHeader):
                     setattr(col, attr, header_cols[col.name][attr])
 
             col.dtype = header_cols[col.name]['datatype']
+            # Warn if col dtype is not a valid ECSV datatype, but allow reading for
+            # back-compatibility with existing older files that have numpy datatypes
+            # like datetime64 or object or python str, which are not in the ECSV standard.
             if col.dtype not in ECSV_DATATYPES:
-                raise ValueError(f'datatype {col.dtype!r} of column {col.name!r} '
-                                 f'is not in allowed values {ECSV_DATATYPES}')
+                msg = (f'unexpected datatype {col.dtype!r} of column {col.name!r} '
+                       f'is not in allowed ECSV datatypes {ECSV_DATATYPES}. '
+                       'Using anyway as a numpy dtype but beware since unexpected '
+                       'results are possible.')
+                warnings.warn(msg, category=InvalidEcsvDatatypeWarning)
 
             # Subtype is written like "int64[2,null]" and we want to split this
             # out to "int64" and [2, None].
@@ -315,7 +326,7 @@ class EcsvOutputter(core.TableOutputter):
                     if col.subtype:
                         warnings.warn(f'unexpected subtype {col.subtype!r} set for column '
                                       f'{col.name!r}, using dtype={col.dtype!r} instead.',
-                                      category=AstropyUserWarning)
+                                      category=InvalidEcsvDatatypeWarning)
                     converter_func, _ = convert_numpy(col.dtype)
                     col.data = converter_func(col.str_vals)
 

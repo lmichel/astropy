@@ -46,6 +46,11 @@ class TransformType(AstropyAsdfType):
                 param_and_model_constraints[constraint] = node[constraint]
         model._initialize_constraints(param_and_model_constraints)
 
+        if "input_units_equivalencies" in node:
+            # this still writes eqs. for compound, but operates on each sub model
+            if not isinstance(model, CompoundModel):
+                model.input_units_equivalencies = node['input_units_equivalencies']
+
         yield model
 
         if 'inverse' in node:
@@ -107,6 +112,10 @@ class TransformType(AstropyAsdfType):
             if bounds_nondefaults:
                 node['bounds'] = bounds_nondefaults
 
+        if not isinstance(model, CompoundModel):
+            if model.input_units_equivalencies:
+                node['input_units_equivalencies'] = model.input_units_equivalencies
+
         return node
 
     @classmethod
@@ -127,6 +136,7 @@ class TransformType(AstropyAsdfType):
         assert a.get_bounding_box() == b.get_bounding_box()
         assert a.inputs == b.inputs
         assert a.outputs == b.outputs
+        assert a.input_units_equivalencies == b.input_units_equivalencies
 
 
 class IdentityType(TransformType):
@@ -170,6 +180,8 @@ class ConstantType(TransformType):
             return functional_models.Const1D(node['value'])
         elif node['dimensions'] == 2:
             return functional_models.Const2D(node['value'])
+        else:
+            raise TypeError('Only 1D and 2D constant models are supported.')
 
     @classmethod
     def to_tree_transform(cls, data, ctx):
@@ -253,18 +265,18 @@ class UnitsMappingType(AstropyType):
                 output["unit"] = m[-1]
             outputs.append(output)
 
-        tree["inputs"] = inputs
-        tree["outputs"] = outputs
+        tree["unit_inputs"] = inputs
+        tree["unit_outputs"] = outputs
 
         return tree
 
     @classmethod
     def from_tree(cls, tree, ctx):
         mapping = tuple((i.get("unit"), o.get("unit"))
-                        for i, o in zip(tree["inputs"], tree["outputs"]))
+                        for i, o in zip(tree["unit_inputs"], tree["unit_outputs"]))
 
         equivalencies = None
-        for i in tree["inputs"]:
+        for i in tree["unit_inputs"]:
             if "equivalencies" in i:
                 if equivalencies is None:
                     equivalencies = {}
@@ -273,7 +285,7 @@ class UnitsMappingType(AstropyType):
         kwargs = {
             "input_units_equivalencies": equivalencies,
             "input_units_allow_dimensionless": {
-                i["name"]: i.get("allow_dimensionless", False) for i in tree["inputs"]},
+                i["name"]: i.get("allow_dimensionless", False) for i in tree["unit_inputs"]},
         }
 
         if "name" in tree:

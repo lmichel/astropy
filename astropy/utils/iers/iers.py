@@ -39,7 +39,7 @@ __all__ = ['Conf', 'conf', 'earth_orientation_table',
 
 # IERS-A default file name, URL, and ReadMe with content description
 IERS_A_FILE = 'finals2000A.all'
-IERS_A_URL = 'ftp://anonymous:mail%40astropy.org@gdc.cddis.eosdis.nasa.gov/pub/products/iers/finals2000A.all'  # noqa: E501
+IERS_A_URL = 'https://maia.usno.navy.mil/ser7/finals2000A.all'
 IERS_A_URL_MIRROR = 'https://datacenter.iers.org/data/9/finals2000A.all'
 IERS_A_README = get_pkg_data_filename('data/ReadMe.finals2000A')
 
@@ -983,8 +983,8 @@ class LeapSeconds(QTable):
         that expires more than 180 - `~astropy.utils.iers.Conf.auto_max_age`
         after the present.
         """
-        good_enough = cls._today() + TimeDelta(180-_none_to_float(conf.auto_max_age),
-                                               format='jd')
+        offset = 180 - (30 if conf.auto_max_age is None else conf.auto_max_age)
+        good_enough = cls._today() + TimeDelta(offset, format='jd')
 
         if files is None:
             # Basic files to go over (entries in _auto_open_files can be
@@ -1028,7 +1028,7 @@ class LeapSeconds(QTable):
             raise ValueError('none of the files could be read. The '
                              'following errors were raised:\n' + str(err_list))
 
-        if self.expires < self._today():
+        if self.expires < self._today() and conf.auto_max_age is not None:
             warn('leap-second file is expired.', IERSStaleWarning)
 
         return self
