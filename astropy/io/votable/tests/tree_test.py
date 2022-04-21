@@ -158,10 +158,82 @@ def test_votable_tag():
     assert 'http://www.ivoa.net/xml/VOTable/VOTable-1.4.xsd"' in xml
 
 def test_annotated_votable_tag():
-    # test the mapping block extraction
-    # Mapping block writing not tested yet
+    # test the mapping block extraction from a file
     votable = parse(get_pkg_data_filename('data/model_mapping.xml'))
     for resource in votable.resources:
-        assert resource.model_mapping.mapping_block.strip().startswith("<VODML") is True
-        assert resource.model_mapping.mapping_block.strip().endswith("</VODML>") is True
+        assert resource.model_mapping.mapping_block.replace(' ', '').replace('\n', '') \
+        == "<VODML><REPORT></REPORT><GLOBALS></GLOBALS></VODML>"
         break
+
+    # Build a VOTable with 3 top level resources.
+    # set a mapping block to the first and the third resources
+    # Assert that mapping blocks can be retrieved
+    from astropy.io.votable import tree as vot
+
+    meta_resource = Resource()
+    meta_resource.type = "meta"
+    # A dummy mapping block for the test.
+    model_mapping = ModelMapping("""
+    <dm-mapping:VODML xmlns:dm-mapping="http://www.ivoa.net/xml/merged-syntax" >
+      <dm-mapping:REPORT status="KO">Unit test mapping block1</dm-mapping:REPORT>
+      <dm-mapping:GLOBALS/>
+    </dm-mapping:VODML>
+    """
+    )
+    meta_resource.model_mapping = model_mapping
+
+    vtf = vot.VOTableFile()
+
+    r1 = vot.Resource()
+    r1.resources.append(meta_resource)
+    vtf.resources.append(r1)
+    t1 = vot.Table(vtf)
+    t1.name = "t1"
+    t2 = vot.Table(vtf)
+    t2.name = 't2'
+    r1.tables.append(t1)
+    r1.tables.append(t2)
+
+    r2 = vot.Resource()
+    vtf.resources.append(r2)
+    t3 = vot.Table(vtf)
+    t3.name = "t3"
+    t4 = vot.Table(vtf)
+    t4.name = "t4"
+    r2.tables.append(t3)
+    r2.tables.append(t4)
+
+    r3 = vot.Resource()
+    meta_resource = Resource()
+    meta_resource.type = "meta"
+    # A dummy mapping block for the test.
+    model_mapping = ModelMapping("""
+    <dm-mapping:VODML xmlns:dm-mapping="http://www.ivoa.net/xml/merged-syntax" >
+      <dm-mapping:REPORT status="KO">Unit test mapping block3</dm-mapping:REPORT>
+      <dm-mapping:GLOBALS/>
+    </dm-mapping:VODML>
+    """
+    )
+    meta_resource.model_mapping = model_mapping
+    r3.resources.append(meta_resource)
+
+    vtf.resources.append(r3)
+    t5 = vot.Table(vtf)
+    t5.name = "t5"
+    t6 = vot.Table(vtf)
+    t6.name = "t6"
+    r3.tables.append(t5)
+    r3.tables.append(t6)
+
+    buff = io.BytesIO()
+    vtf.to_xml(buff)
+
+    buff.seek(0)
+    vtf2 = parse(buff)
+
+    assert len(vtf2.resources) == 3
+    assert vtf2.resources[0].model_mapping.mapping_block.replace(' ', '').replace('\n', '') \
+    == "<VODML><REPORTstatus='KO'>Unittestmappingblock1</REPORT><GLOBALS></GLOBALS></VODML>"
+    assert vtf2.resources[1].model_mapping is None
+    assert vtf2.resources[2].model_mapping.mapping_block.replace(' ', '').replace('\n', '') \
+    == "<VODML><REPORTstatus='KO'>Unittestmappingblock3</REPORT><GLOBALS></GLOBALS></VODML>"
