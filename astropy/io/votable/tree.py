@@ -3095,8 +3095,7 @@ class Table(Element, _IDProperty, _NameProperty, _UcdProperty,
         for info in self.infos:
             yield info
 
-
-class ModelMapping(Element):
+class MivotBlock(Element):
     """
     Model mapping holder
     Processing VO model views on data is out of the scope of Astropy.
@@ -3106,16 +3105,16 @@ class ModelMapping(Element):
     The mapping block is handled as a correctly indented XML string
     which is meant to be parsed by the calling API (e.g. PyVO)
     """
-    def __init__(self, mapping_block=None):
-        if mapping_block is not None:
-            self._mapping_block = mapping_block
+    def __init__(self, content=None):
+        if content is not None:
+            self._content = content
         else:
-            self._mapping_block = ''
+            self._content = ''
         self._indent_level = 0
         self._on_error = False
 
     def __str__(self):
-        return self._mapping_block
+        return self._content
     
     def _add_statement(self, start, tag, data, config, pos):
         """
@@ -3127,8 +3126,8 @@ class ModelMapping(Element):
         # The first mapping tag (<VODML>) is consumed by the host RESOURCE
         # To check that the content is a mapping block. This cannot be done here 
         # because that RESOURCE might have another content
-        if self._mapping_block == '':
-            self._mapping_block = '<VODML>\n'
+        if self._content == '':
+            self._content = '<VODML xmlns="http://www.ivoa.net/xml/mivot">\n'
             self._indent_level += 1
 
         ele_content = ""
@@ -3146,31 +3145,28 @@ class ModelMapping(Element):
             self._indent_level -= 1
         indent = "".join(" " for _ in range(2*self._indent_level))
         if ele_content:
-            self._mapping_block += indent + "  "  + ele_content
-        self._mapping_block += indent + element
+            self._content += indent + "  "  + ele_content
+        self._content += indent + element
         if start is True:
             self._indent_level += 1
-
+        
     def _unknown_mapping_tag(self, start, tag, data, config, pos):
         """
         In case of unexpected tag, the parsing stops and the mapping block 
         is set with a REPORT tag telling what went wrong
         """
-        self._mapping_block = f'<VODML>\n  <REPORT status="KO">Unknown model mapping statement: {tag}</REPORT>\n</VODML>'
+        self._content = f'<VODML xmlns="http://www.ivoa.net/xml/mivot">\n  <REPORT status="KO">Unknown model mapping statement: {tag}</REPORT>\n</VODML>'
         self._on_error = True
         warn_or_raise(W10, W10, tag, config={'verify': 'warn'}, pos=pos)
 
-
-    
     @property
-    def mapping_block(self,):
+    def content(self,):
         """
         The XML mapping block serialized as string.
-        Must be empty if type != meta
         """
-        if self._mapping_block == '':
-            self._mapping_block = '<VODML>\n  <REPORT status="KO">No Mapping block</REPORT>\n</VODML>\n'
-        return self._mapping_block
+        if self._content == '':
+            self._content = '<VODML xmlns="http://www.ivoa.net/xml/mivot">\n  <REPORT status="KO">No Mapping block</REPORT>\n</VODML>\n'
+        return self._content
     
     
     
@@ -3179,7 +3175,6 @@ class ModelMapping(Element):
         Regular parser similar to others VOTable components
         """
         self._votable = votable
-
         model_mapping_mapping = {
             'VODML': self._add_statement,
             'GLOBALS': self._add_statement,
@@ -3211,7 +3206,7 @@ class ModelMapping(Element):
         """
         Tell the writer to insert the mapping block in its output stream
         """
-        w.string_element(self._mapping_block)
+        w.string_element(self._content)
     
 class Resource(Element, _IDProperty, _NameProperty, _UtypeProperty,
                _DescriptionProperty):
@@ -3246,7 +3241,7 @@ class Resource(Element, _IDProperty, _NameProperty, _UtypeProperty,
         self._tables = HomogeneousList(Table)
         self._resources = HomogeneousList(Resource)
 
-        self._model_mapping = ModelMapping()
+        self._mivot_block = MivotBlock()
         warn_unknown_attrs('RESOURCE', kwargs.keys(), config, pos)
 
     def __repr__(self):
@@ -3277,24 +3272,23 @@ class Resource(Element, _IDProperty, _NameProperty, _UtypeProperty,
         self._type = type
         
     @property
-    def model_mapping(self):
+    def mivot_block(self):
         """
         The XML mapping block serialized as string.
-        Take the resource mqpping block if type=meta
-        or the mqpping block of the sub-resource (type=meta) if type=results
+        Take the resource mapping block if type=meta
+        or the mapping block of the of the first sub-resource (type=meta) having one
         """
-        if self.type == 'meta':
-            return self._model_mapping
-        elif self.type == 'results':
+        if self.type == 'results':
             for resource in self.resources:
-                return resource.model_mapping
-        return None
+                if str(resource._mivot_block).strip() != "":
+                    return resource._mivot_block
+        return self._mivot_block
 
-    @model_mapping.setter
-    def model_mapping(self, model_mapping):
-        if self.type != 'meta':
+    @mivot_block.setter
+    def mivot_block(self, mivot_block):
+        if self.type == 'results':
             vo_raise(E26)
-        self._model_mapping = model_mapping
+        self._mivot_block = mivot_block
 
     @property
     def extra_attributes(self):
@@ -3425,13 +3419,11 @@ class Resource(Element, _IDProperty, _NameProperty, _UtypeProperty,
             'DESCRIPTION': self._ignore_add
             }
 
-
         for start, tag, data, pos in iterator:
-            # The only content supported for meta RESOURCEs is a model mapping block
-            # If there is no such block, the RESOURCE parsing can exit
-            if self.type == "meta" and tag == "VODML":
-                self._model_mapping.parse(votable, iterator, config)
-                break
+            # If the resource content starts with VODML, 
+            # the parsing is delegated to the MIVOT parser
+            if tag == "VODML":
+                self._mivot_block.parse(votable, iterator, config)
 
             if start:
                 tag_mapping.get(tag, self._add_unknown_tag)(
@@ -3440,8 +3432,8 @@ class Resource(Element, _IDProperty, _NameProperty, _UtypeProperty,
                 if self.description is not None:
                     warn_or_raise(W17, W17, 'RESOURCE', config, pos)
                 self.description = data or None
-            elif tag == 'RESOURCE':
-                pass
+            elif tag == "RESOURCE":
+                break
     
         del self._votable
 
@@ -3453,8 +3445,8 @@ class Resource(Element, _IDProperty, _NameProperty, _UtypeProperty,
         with w.tag('RESOURCE', attrib=attrs):
             if self.description is not None:
                 w.element("DESCRIPTION", self.description, wrap=True)
-            if self.model_mapping is not None and self.type == "meta":
-                self.model_mapping.to_xml(w)
+            if self.mivot_block is not None and self.type == "meta":
+                self.mivot_block.to_xml(w)
             for element_set in (self.coordinate_systems, self.time_systems,
                                 self.params, self.infos, self.links,
                                 self.tables, self.resources):

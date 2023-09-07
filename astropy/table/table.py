@@ -1092,6 +1092,8 @@ class Table:
                 raise ValueError(f'{inp_str} must be a list or None')
 
         if len(names) != n_cols or len(dtype) != n_cols:
+            print(len(names))
+            print(n_cols)
             raise ValueError(
                 'Arguments "names" and "dtype" must match number of columns')
 
