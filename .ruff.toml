@@ -19,7 +19,6 @@ ignore = [
     "B007",  # UnusedLoopControlVariable
     "B023",  # FunctionUsesLoopVariable
     "B028",  # No-explicit-stacklevel
-    "B033",  # Sets should not contain duplicate item
     "B904",  # RaiseWithoutFromInsideExcept
     "B905",  # ZipWithoutExplicitStrict   # requires 3.10+
 
@@ -49,7 +48,6 @@ ignore = [
 
     # flake8-datetimez (DTZ)
     "DTZ001",  # call-datetime-without-tzinfo
-    "DTZ003",  # call-datetime-utcnow
     "DTZ005",  # call-datetime-now-without-tzinfo
     "DTZ007",  # call-datetime-strptime-without-zone
 
@@ -133,8 +131,6 @@ ignore = [
     "PLR1714",  # Consider merging multiple comparisons
     "PLR2004",  # MagicValueComparison
     "PLR5501",  # collapsible-else-if
-    "PLW0129",  # assert-on-string-literal
-    "PLW0602",  # global-variable-not-assigned
     "PLW0603",  # global-statement
     "PLW2901",  # redefined-loop-name
 
@@ -172,7 +168,6 @@ ignore = [
     "PTH120",  # os-path-dirname
     "PTH122",  # os-path-splitext
     "PTH123",  # builtin-open
-    "PTH124",  # py-path
     "PTH202",  # `os.path.getsize` should be replaced by `Path.stat().st_size`
     "PTH206",  # Replace `.split(os.sep)` with `Path.parts`
     "PTH207",  # Replace `glob` with `Path.glob` or `Path.rglob`
@@ -247,7 +242,6 @@ ignore = [
     "TRY201",  # verbose-raise
     "TRY300",  # Consider `else` block
     "TRY301",  # raise-within-try
-    "TRY302",  # Remove exception handler; error is immediately re-raised
     "TRY400",  # error-instead-of-exception
 
     # flake8-quotes (Q)
@@ -272,7 +266,7 @@ unfixable = [
 "astropy/convolution/*" = []
 "astropy/coordinates/*" = ["C408"]
 "astropy/cosmology/*" = ["C408"]
-"astropy/io/*" = ["B015", "PIE790"]
+"astropy/io/*" = ["PIE790"]
 "astropy/logger.py" = ["C408"]
 "astropy/modeling/*" = ["C408"]
 "astropy/nddata/*" = ["C408"]

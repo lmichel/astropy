@@ -13,9 +13,10 @@ from typing import Any, NamedTuple
 import numpy as np
 
 from astropy import units as u
+from astropy.units import SpecificTypeQuantity
 from astropy.utils import isiterable
 
-from . import angle_formats as form
+from . import formats
 
 __all__ = ["Angle", "Latitude", "Longitude"]
 
@@ -63,7 +64,7 @@ class signed_dms_tuple(NamedTuple):
     """The second value."""
 
 
-class Angle(u.SpecificTypeQuantity):
+class Angle(SpecificTypeQuantity):
     """
     One or more angular value(s) with units equivalent to radians or degrees.
 
@@ -160,17 +161,17 @@ class Angle(u.SpecificTypeQuantity):
                 )
 
             elif isinstance(angle, str):
-                angle, angle_unit = form.parse_angle(angle, unit)
+                angle, angle_unit = formats.parse_angle(angle, unit)
                 if angle_unit is None:
                     angle_unit = unit
 
                 if isinstance(angle, tuple):
                     if angle_unit == u.hourangle:
-                        form._check_hour_range(angle[0])
-                    form._check_minute_range(angle[1])
+                        formats._check_hour_range(angle[0])
+                    formats._check_minute_range(angle[1])
                     a = np.abs(angle[0]) + angle[1] / 60.0
                     if len(angle) == 3:
-                        form._check_second_range(angle[2])
+                        formats._check_second_range(angle[2])
                         a += angle[2] / 3600.0
 
                     angle = np.copysign(a, angle[0])
@@ -203,12 +204,12 @@ class Angle(u.SpecificTypeQuantity):
     @property
     def hms(self):
         """The angle's value in hours, as a named tuple with ``(h, m, s)`` members."""
-        return hms_tuple(*form.hours_to_hms(self.hourangle))
+        return hms_tuple(*formats.hours_to_hms(self.hourangle))
 
     @property
     def dms(self):
         """The angle's value in degrees, as a ``(d, m, s)`` named tuple."""
-        return dms_tuple(*form.degrees_to_dms(self.degree))
+        return dms_tuple(*formats.degrees_to_dms(self.degree))
 
     @property
     def signed_dms(self):
@@ -221,7 +222,7 @@ class Angle(u.SpecificTypeQuantity):
         representations of coordinates that are correct for negative angles.
         """
         return signed_dms_tuple(
-            np.sign(self.degree), *form.degrees_to_dms(np.abs(self.degree))
+            np.sign(self.degree), *formats.degrees_to_dms(np.abs(self.degree))
         )
 
     def to_string(
@@ -332,7 +333,7 @@ class Angle(u.SpecificTypeQuantity):
                     raise ValueError(f"Unknown format '{format}'")
                 sep = separators[format][unit]
             func = functools.partial(
-                form.degrees_to_string if unit_is_deg else form.hours_to_string,
+                formats.degrees_to_string if unit_is_deg else formats.hours_to_string,
                 precision=precision,
                 sep=sep,
                 pad=pad,
@@ -602,6 +603,7 @@ class Latitude(Angle):
         # Ensure ndim>=1 so that comparison is done using the angle dtype.
         # Otherwise, e.g., np.array(np.pi/2, 'f4') > np.pi/2 will yield True.
         # (This feels like a bug -- see https://github.com/numpy/numpy/issues/23247)
+        # TODO: address this again when/if numpy 2.0 exists - see above issue
         # Note that we should avoid using `angles.dtype` directly since for
         # structured arrays like Distribution this will be `void`.
         angles_view = angles.view(np.ndarray)[np.newaxis]
