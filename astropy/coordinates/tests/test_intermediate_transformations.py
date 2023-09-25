@@ -30,9 +30,9 @@ from astropy.coordinates import (
     SphericalRepresentation,
     UnitSphericalRepresentation,
     get_sun,
+    golden_spiral_grid,
     solar_system_ephemeris,
 )
-from astropy.coordinates.angle_utilities import golden_spiral_grid
 from astropy.coordinates.builtin_frames.intermediate_rotation_transforms import (
     cirs_to_itrs_mat,
     gcrs_to_cirs_mat,
@@ -872,7 +872,7 @@ def test_earth_orientation_table(monkeypatch):
         with warnings.catch_warnings():
             # Server occasionally blocks IERS download in CI.
             warnings.filterwarnings("ignore", message=r".*using local IERS-B.*")
-            # This also captures unclosed socket warning that is ignored in setup.cfg
+            # This also captures unclosed socket warning that is ignored in pyproject.toml
             warnings.filterwarnings("ignore", message=r".*unclosed.*")
             altaz_auto = sc.transform_to(altaz)
     else:

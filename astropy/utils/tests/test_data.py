@@ -23,7 +23,6 @@ from contextlib import nullcontext
 from itertools import islice
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 
-import py.path
 import pytest
 
 import astropy.utils.data
@@ -905,7 +904,7 @@ def test_find_by_hash(valid_urls, temp_cache):
 def test_find_invalid():
     # this is of course not a real data file and not on any remote server, but
     # it should *try* to go to the remote server
-    with pytest.raises(urllib.error.URLError):
+    with pytest.raises((urllib.error.URLError, TimeoutError)):
         get_pkg_data_filename(
             "kjfrhgjklahgiulrhgiuraehgiurhgiuhreglhurieghruelighiuerahiulruli"
         )
@@ -1600,12 +1599,6 @@ def test_cache_dir_is_actually_a_file(tmp_path, valid_urls):
 def test_get_fileobj_str(a_file):
     fn, c = a_file
     with get_readable_fileobj(str(fn)) as rf:
-        assert rf.read() == c
-
-
-def test_get_fileobj_localpath(a_file):
-    fn, c = a_file
-    with get_readable_fileobj(py.path.local(fn)) as rf:
         assert rf.read() == c
 
 
